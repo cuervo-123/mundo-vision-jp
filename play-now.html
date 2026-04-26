@@ -803,7 +803,7 @@ function parseRaw(txt){
 const TMDB_IMG = 'https://image.tmdb.org/t/p/w500';
 const TMDB_CACHE_PREFIX = 'TMDB_CACHE_MOVIE_';
 // 🔐 TOKEN PRIVADO SOLO PARA USO LOCAL. Si cambias el token, pégalo aquí.
-const TMDB_BEARER_TOKEN = '';
+const TMDB_BEARER_TOKEN = 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJhODBkMjA2YzQ1ZGFkMWIyNDllNzdlNzkxZDJiNjlhYyIsIm5iZiI6MTc3MTk5NDU4My41MDMsInN1YiI6IjY5OWU3ZGQ3ZjMzYWY2ZTQ3ZDA0ZDFmMSIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.FjuQD_AvT8TtP8n3NBw3SYDPwcyFG97PuSx_ii3SUxc;
 
 async function tmdbFetchJson(url, token){
   const res = await fetch(url, {
