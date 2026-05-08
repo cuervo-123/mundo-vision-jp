@@ -1,0 +1,2475 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Tech Blue • Node Engine V1.3 (Trading Command Center)</title>
+<meta name="color-scheme" content="dark">
+<style>
+  :root{
+    --bg0:#060a16;
+    --bg1:#0b1020;
+    --panel:#0f1630cc;
+    --panel2:#0b1430cc;
+    --line:rgba(79,155,255,.28);
+    --text:#eaf2ff;
+    --muted:#9eb8ff;
+    --accent:#1f8bff;
+    --accent2:#4ac3ff;
+    --good:#20c997; --warn:#ffb020; --bad:#ef476f;
+    --shadow: 0 18px 50px rgba(0,0,0,.55);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background: radial-gradient(1200px 800px at 20% 10%, rgba(31,139,255,.22), transparent 60%),
+                radial-gradient(1100px 700px at 85% 35%, rgba(74,195,255,.12), transparent 65%),
+                linear-gradient(160deg, var(--bg0) 0%, var(--bg1) 40%, #071029 100%);
+    color:var(--text);
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    overflow:hidden;
+  }
+
+  header{
+    position:fixed; inset:10px 10px auto 10px;
+    display:flex; align-items:center; justify-content:space-between;
+    gap:10px;
+    z-index:30;
+    pointer-events:none;
+  }
+  .brand{
+    pointer-events:auto;
+    display:flex; align-items:center; gap:10px;
+    background: linear-gradient(180deg, rgba(15,22,48,.75), rgba(11,20,48,.55));
+    border:1px solid var(--line);
+    border-radius:18px;
+    padding:10px 12px;
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(10px);
+  }
+  .logo{
+    width:34px;height:34px;border-radius:12px;
+    border:1px solid rgba(255,255,255,.10);
+    background:
+      radial-gradient(10px 10px at 30% 30%, rgba(255,255,255,.18), transparent 60%),
+      linear-gradient(135deg, rgba(31,139,255,.35), rgba(74,195,255,.15));
+  }
+  .brand b{font-size:13px; letter-spacing:.2px}
+  .brand small{display:block; color:var(--muted); font-size:11px; margin-top:1px}
+
+  .barActions{
+    pointer-events:auto;
+    display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;
+    align-items:center;
+  }
+  .btn{
+    border:1px solid var(--line);
+    background: rgba(10,18,40,.55);
+    color:var(--text);
+    padding:9px 10px;
+    border-radius:14px;
+    cursor:pointer;
+    font-size:12px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.30);
+    backdrop-filter: blur(10px);
+    white-space:nowrap;
+  }
+  .btn:hover{border-color: rgba(79,155,255,.55)}
+  .btn:active{transform: translateY(1px)}
+  .btn.bad{border-color: rgba(239,71,111,.35)}
+  .btn.good{border-color: rgba(32,201,151,.35)}
+  .btn.warn{border-color: rgba(255,176,32,.35)}
+
+  .pill{
+    border:1px solid rgba(79,155,255,.25);
+    background: rgba(10,18,40,.55);
+    color:var(--text);
+    padding:7px 10px;
+    border-radius:999px;
+    font-size:12px;
+    display:flex; align-items:center; gap:8px;
+  }
+  .pill select{
+    padding:6px 8px;
+    border-radius:999px;
+    border:1px solid rgba(79,155,255,.22);
+    background: rgba(2,8,20,.45);
+    color: var(--text);
+    outline:none;
+    font-size:12px;
+  }
+
+  #stage{ position:absolute; inset:0; overflow:hidden; }
+  #wires{ position:absolute; inset:0; z-index:5; pointer-events:none; }
+  #nodes{ position:absolute; inset:0; z-index:10; }
+
+  .node{
+    position:absolute;
+    width: 320px;
+    max-width: min(92vw, 520px);
+    border-radius: 20px;
+    border:1px solid var(--line);
+    background: linear-gradient(180deg, rgba(15,22,48,.78), rgba(11,20,48,.55));
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(10px);
+    overflow:hidden;
+    user-select:none;
+    transform: translate3d(0,0,0);
+  }
+  .node[data-type="core"]{ width: 380px; }
+  .node[data-type="chart"]{ width: 380px; }
+  .node[data-type="multichart"]{ width: 520px; }
+  .node[data-type="alerts"]{ width: 380px; }
+
+  /* SIDE DRAG HANDLES: agarra el nodo desde los bordes aunque el iframe bloquee el header */
+  .dragSide{
+    position:absolute;
+    top:48px;
+    bottom:10px;
+    width:18px;
+    z-index:65;
+    cursor:grab;
+    pointer-events:auto;
+    opacity:.42;
+    transition: opacity .16s ease, background .16s ease, box-shadow .16s ease;
+  }
+  .dragSide.left{ left:0; border-radius:0 14px 14px 0; }
+  .dragSide.right{ right:0; border-radius:14px 0 0 14px; }
+  .dragSide::after{
+    content:"";
+    position:absolute;
+    top:50%;
+    left:50%;
+    width:4px;
+    height:54px;
+    transform:translate(-50%,-50%);
+    border-radius:999px;
+    background:rgba(74,195,255,.38);
+    box-shadow:0 0 18px rgba(31,139,255,.22);
+  }
+  .dragSide:hover{
+    opacity:1;
+    background:rgba(31,139,255,.10);
+    box-shadow:0 0 28px rgba(31,139,255,.14);
+  }
+  .dragSide:active{ cursor:grabbing; }
+
+  .nodeHead{
+    padding:10px 12px;
+    display:flex; align-items:center; justify-content:space-between;
+    gap:10px;
+    border-bottom: 1px solid rgba(79,155,255,.18);
+    background: radial-gradient(900px 300px at 20% 0%, rgba(31,139,255,.20), transparent 60%);
+    cursor: grab;
+    position:relative;
+    z-index:50;
+    pointer-events:auto;
+  }
+  .nodeHead:active{cursor:grabbing}
+  .nodeTitle{ display:flex; align-items:center; gap:10px; min-width:0; }
+  .chip{
+    font-size:11px;
+    padding:5px 8px;
+    border-radius:999px;
+    border:1px solid rgba(255,255,255,.10);
+    color:var(--muted);
+    background: rgba(255,255,255,.04);
+    white-space:nowrap;
+  }
+  .nodeTitle b{
+    font-size:12.5px;
+    letter-spacing:.2px;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    max-width: 260px;
+  }
+  .nodeTools{ display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; position:relative; z-index:70; pointer-events:auto; }
+  .mini{
+    position:relative;
+    z-index:80;
+    pointer-events:auto;
+    border:1px solid rgba(79,155,255,.20);
+    background: rgba(0,0,0,.18);
+    color:var(--text);
+    padding:6px 8px;
+    border-radius:12px;
+    cursor:pointer;
+    font-size:12px;
+  }
+  .mini:hover{border-color: rgba(79,155,255,.55)}
+  .mini:active{transform: translateY(1px)}
+
+  .nodeBody{ padding:10px 12px 12px; user-select:text; }
+  .row{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
+  .field{
+    display:flex; flex-direction:column; gap:6px;
+    min-width: 130px;
+    flex: 1 1 160px;
+  }
+  label{font-size:11px; color:var(--muted)}
+  input,select,textarea{
+    width:100%;
+    padding:9px 10px;
+    border-radius:14px;
+    border:1px solid rgba(79,155,255,.22);
+    background: rgba(2,8,20,.45);
+    color:var(--text);
+    outline:none;
+  }
+  textarea{min-height:78px; resize:vertical}
+
+  .hint{color:var(--muted); font-size:11px; line-height:1.35}
+  .list{ margin-top:10px; display:grid; gap:8px; }
+  .item{
+    padding:10px 10px;
+    border-radius:14px;
+    border:1px solid rgba(79,155,255,.16);
+    background: rgba(0,0,0,.15);
+  }
+  .item a{color:var(--accent2); text-decoration:none}
+  .item a:hover{text-decoration:underline}
+  .item small{color:var(--muted)}
+  .tags{display:flex; flex-wrap:wrap; gap:8px; margin-top:10px;}
+  .tag{
+    border:1px solid rgba(79,155,255,.18);
+    background: rgba(0,0,0,.14);
+    padding:7px 10px;
+    border-radius:999px;
+    cursor:pointer;
+    font-size:12px;
+    color: var(--text);
+  }
+  .tag:hover{border-color: rgba(79,155,255,.55)}
+  .tag:active{transform: translateY(1px)}
+
+  .tvBox{
+    position:relative;
+    z-index:1;
+    margin-top:10px;
+    border-radius:16px;
+    border:1px solid rgba(79,155,255,.18);
+    overflow:hidden;
+    background: rgba(0,0,0,.15);
+  }
+  .tvBox .tvInner{height: 360px; width:100%;}
+  .node[data-type="core"] .tvBox .tvInner{height: 300px;}
+  .node[data-type="chart"] .tvBox .tvInner{height: 420px;}
+
+  .grid4{
+    position:relative;
+    z-index:1;
+    margin-top:10px;
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap:10px;
+  }
+  .cell{
+    border-radius:16px;
+    border:1px solid rgba(79,155,255,.18);
+    overflow:hidden;
+    background: rgba(0,0,0,.15);
+  }
+  .cellHead{
+    padding:8px 10px;
+    border-bottom:1px solid rgba(79,155,255,.14);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+    background: rgba(10,18,40,.40);
+  }
+  .cellHead b{font-size:12px}
+  .cellHead small{color:var(--muted); font-size:11px}
+  .cellBody{height:240px;}
+  .cellBody > div{height:100%}
+
+
+
+  /* Tech Blue Chart Size + Platform Controls */
+  .chartControls{margin-top:8px;align-items:flex-end}
+  .sizeGroup{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+  .node[data-type="chart"].chart-small{width:380px!important;max-width:min(96vw,380px)}
+  .node[data-type="chart"].chart-medium{width:560px!important;max-width:min(96vw,560px)}
+  .node[data-type="chart"].chart-large{width:820px!important;max-width:min(96vw,820px)}
+  .node[data-type="chart"].chart-small .tvBox .tvInner{height:300px}
+  .node[data-type="chart"].chart-medium .tvBox .tvInner{height:460px}
+  .node[data-type="chart"].chart-large .tvBox .tvInner{height:620px}
+
+  .node[data-type="multichart"].chart-small{width:520px!important;max-width:min(96vw,520px)}
+  .node[data-type="multichart"].chart-medium{width:760px!important;max-width:min(96vw,760px)}
+  .node[data-type="multichart"].chart-large{width:1040px!important;max-width:min(96vw,1040px)}
+  .node[data-type="multichart"].chart-small .cellBody{height:220px}
+  .node[data-type="multichart"].chart-medium .cellBody{height:320px}
+  .node[data-type="multichart"].chart-large .cellBody{height:430px}
+
+  .node.chart-full{
+    position:fixed!important;
+    left:12px!important; top:12px!important;
+    width:calc(100vw - 24px)!important;
+    max-width:none!important;
+    height:calc(100vh - 24px)!important;
+    z-index:9999!important;
+  }
+  .node.chart-full .nodeBody{height:calc(100% - 56px);display:flex;flex-direction:column;overflow:auto}
+  .node.chart-full .tvBox{flex:1;min-height:420px}
+  .node.chart-full .tvBox .tvInner{height:100%!important}
+  .node.chart-full .grid4{flex:1;min-height:0}
+  .node.chart-full .cellBody{height:calc((100vh - 230px)/2)!important;min-height:260px}
+  .weltradeFrame{width:100%;height:100%;border:0;background:#050914}
+
+  #toast{
+    position:fixed;
+    left:10px; bottom:10px;
+    z-index:40;
+    max-width:min(740px, 92vw);
+    padding:10px 12px;
+    border-radius:16px;
+    border:1px solid var(--line);
+    background: rgba(10,18,40,.65);
+    color:var(--text);
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(10px);
+    font-size:12px;
+  }
+  #toast b{color:var(--accent2)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="logo" aria-hidden="true"></div>
+    <div>
+      <b>Tech Blue • Node Engine</b>
+      <small>V1.3 — Multi-Chart • Sessions • Journal • Alerts</small>
+    </div>
+  </div>
+
+  <div class="barActions">
+    <div class="pill">
+      Workspace:
+      <select id="workspaceSel" title="Reordena nodos por sesión">
+        <option value="free">Free</option>
+        <option value="london">London</option>
+        <option value="ny">New York</option>
+        <option value="research">Research</option>
+      </select>
+      <button class="btn" id="btnWorkspace">⚡ Apply</button>
+    </div>
+
+    <button class="btn good" id="btnAddChart">➕ Chart</button>
+    <button class="btn good" id="btnAddMulti">➕ Multi-Chart</button>
+    <button class="btn" id="btnAddSession">➕ Session</button>
+
+    <button class="btn" id="btnAddNews">➕ News</button>
+    <button class="btn" id="btnAddCal">➕ Calendar</button>
+    <button class="btn" id="btnAddWatch">➕ Watchlist</button>
+    <button class="btn" id="btnAddSnap">➕ Snapshots</button>
+    <button class="btn" id="btnAddStrat">➕ Strategy</button>
+    <button class="btn" id="btnAddAlert">➕ Alerts</button>
+    <button class="btn" id="btnAddJournal">➕ Journal</button>
+    <button class="btn good" id="btnAddRecorder">🎥 Recorder</button>
+    <button class="btn" id="btnAddNote">➕ Notes</button>
+
+    <button class="btn warn" id="btnSave">💾 Save</button>
+    <button class="btn" id="btnLoad">📂 Load</button>
+    <button class="btn" id="btnExport">⬇️ Export</button>
+    <button class="btn" id="btnImport">⬆️ Import</button>
+    <button class="btn bad" id="btnResetAll">🧨 Reset</button>
+  </div>
+</header>
+
+<div id="stage">
+  <svg id="wires"></svg>
+  <div id="nodes"></div>
+</div>
+
+<div id="toast">
+  <b>Tips:</b> Arrastra el header del nodo. <b>＋</b> crea nodos hijos.
+  CORE ahora tiene <b>Sync: Symbol / TF / Both</b>.
+  Multi-Chart = 4 charts (4H/1H/15m/1m por defecto).
+  Session Node puede aplicar workspace automáticamente.
+</div>
+
+<script>
+
+const STORE_KEY = "techblue_node_engine_v1_3";
+
+/* Utils */
+const $ = (q, el=document)=>el.querySelector(q);
+const $$ = (q, el=document)=>Array.from(el.querySelectorAll(q));
+const clamp = (v,min,max)=>Math.max(min, Math.min(max,v));
+const uid = ()=>"n_"+Math.random().toString(16).slice(2)+"_"+Date.now().toString(16);
+function stageRect(){ return $("#stage").getBoundingClientRect(); }
+function centerOf(el){ const r = el.getBoundingClientRect(); return { x:r.left+r.width/2, y:r.top+r.height/2, w:r.width, h:r.height }; }
+function intersects(a,b, pad=12){
+  return !(a.x+a.w+pad<b.x || a.x>b.x+b.w+pad || a.y+a.h+pad<b.y || a.y>b.y+b.h+pad);
+}
+function allOrigins(url){ return "https://api.allorigins.win/raw?url=" + encodeURIComponent(url); }
+function safeText(s){ return (s||"").toString().replace(/[<>&"]/g, m=>({ "<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;" }[m])); }
+function nowISO(){ return new Date().toISOString(); }
+function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+/* Engine */
+const Engine = {
+  nodes: new Map(),
+  edges: [],
+  z: 30,
+  golden: 2.399963229728653,
+  alertTimers: new Map(), // nodeId -> intervalId
+  recorders: new Map(), // nodeId -> {recorder, stream, chunks, clips}
+};
+
+/* Defaults */
+function defaultNodeState(type){
+  if(type==="core")  return { title:"CORE", symbol:"OANDA:EURUSD", interval:"15", syncMode:"both" }; // symbol|tf|both
+  if(type==="chart") return { title:"Chart", symbol:"OANDA:EURUSD", interval:"60", platform:"tradingview", chartSize:"medium", chartFull:false };
+  if(type==="multichart") return { title:"Multi-Chart", symbol:"OANDA:EURUSD", cells:["240","60","15","1"], platform:"tradingview", chartSize:"medium", chartFull:false }; // 4H/1H/15m/1m
+  if(type==="news")  return { title:"News", feed:"myfxbook_news", limit:10, filter:"" };
+  if(type==="calendar") return { title:"Calendar", feed:"myfxbook_calendar", limit:15, filter:"USD" };
+  if(type==="notes") return { title:"Notes", text:"Ideas / plan / checklist…" };
+  if(type==="watchlist") return { title:"Watchlist", items:"OANDA:EURUSD\nOANDA:GBPUSD\nOANDA:USDJPY\nOANDA:XAUUSD\nBINANCE:BTCUSDT\nBINANCE:ETHUSDT" };
+  if(type==="snapshots") return { title:"Snapshots", list:[] };
+  if(type==="strategy") return { title:"Strategy", template:"ema_smc", notes:"", lastRun:"" };
+  if(type==="alerts") return { title:"Alerts", enabled:false, mode:"crypto", symbol:"bitcoin", manualPrice:"", everySec:15, rules:[] };
+  if(type==="session") return { title:"Session", session:"london", autoWorkspace:true, workspace:"london", notes:"Plan de sesión…" };
+  if(type==="journal") return { title:"Trade Journal", rows:[] };
+  if(type==="recorder") return { title:"Screen Recorder", includeAudio:true, quality:"standard", clips:[] };
+  return { title:"Node" };
+}
+
+/* Create Node */
+function createNode({type="notes", parentId=null, x=null, y=null, state=null}){
+  const id = uid();
+  const st = state ? {...defaultNodeState(type), ...state} : defaultNodeState(type);
+
+  let w =
+    (type==="core") ? 380 :
+    (type==="chart") ? 380 :
+    (type==="multichart") ? 520 :
+    (type==="alerts") ? 380 :
+    (type==="recorder") ? 400 :
+    340;
+
+  let h =
+    (type==="core") ? 520 :
+    (type==="chart") ? 680 :
+    (type==="multichart") ? 640 :
+    (type==="news") ? 480 :
+    (type==="calendar") ? 500 :
+    (type==="watchlist") ? 430 :
+    (type==="snapshots") ? 460 :
+    (type==="strategy") ? 470 :
+    (type==="alerts") ? 540 :
+    (type==="session") ? 420 :
+    (type==="journal") ? 540 :
+    (type==="recorder") ? 430 :
+    340;
+
+  const nodeModel = { id, type, parentId, x:x??100, y:y??100, w, h, state:st, createdAt:Date.now(), angleIndex:0 };
+
+  const el = document.createElement("div");
+  el.className = "node";
+  el.dataset.id = id;
+  el.dataset.type = type;
+  el.style.width = w + "px";
+  el.style.zIndex = (++Engine.z).toString();
+
+  el.innerHTML = `
+    <div class="nodeHead" data-drag>
+      <div class="nodeTitle">
+        <span class="chip">${type.toUpperCase()}</span>
+        <b data-title>${safeText(st.title || type)}</b>
+      </div>
+      <div class="nodeTools">
+        <button class="mini" title="Crear nodo hijo" data-act="spawn">＋</button>
+        ${type==="core" ? "" : `<button class="mini" title="Traer al frente" data-act="front">⬆</button>`}
+        ${type==="core" ? "" : `<button class="mini" title="Eliminar" data-act="del">✕</button>`}
+      </div>
+    </div>
+    <div class="dragSide left" data-side-drag title="Arrastrar nodo desde el lado izquierdo"></div>
+    <div class="dragSide right" data-side-drag title="Arrastrar nodo desde el lado derecho"></div>
+    <div class="nodeBody">${renderBody(type, id, st)}</div>
+  `;
+
+  $("#nodes").appendChild(el);
+  Engine.nodes.set(id, nodeModel);
+
+  if(parentId){
+    smartPlaceAroundParent(id, parentId);
+    Engine.edges.push({from: parentId, to: id});
+  }else{
+    const sr = stageRect();
+    nodeModel.x = clamp(nodeModel.x, 10, sr.width - w - 10);
+    nodeModel.y = clamp(nodeModel.y, 64, sr.height - h - 10);
+  }
+
+  syncNodeDOM(id);
+  applyChartShell(id);
+  bindNode(id);
+
+  // init special
+  if(type==="chart" || type==="core") renderTradingViewWidget(id);
+  if(type==="multichart") renderMultiChart(id);
+  if(type==="news" || type==="calendar") loadFeed(id);
+  if(type==="watchlist") renderWatchlistTags(id);
+  if(type==="snapshots") renderSnapshots(id);
+  if(type==="alerts") renderAlerts(id);
+  if(type==="journal") renderJournal(id);
+  if(type==="recorder") renderRecorder(id);
+
+  drawWires();
+  return id;
+}
+
+/* Body renderer */
+function renderBody(type, id, st){
+  if(type==="core"){
+    return `
+      <div class="row">
+        <div class="field">
+          <label>Symbol (TradingView)</label>
+          <input data-k="symbol" value="${safeText(st.symbol)}" placeholder="OANDA:EURUSD, BINANCE:BTCUSDT...">
+        </div>
+        <div class="field">
+          <label>Timeframe</label>
+          <select data-k="interval">
+            ${["1","5","15","30","60","240","D","W"].map(v=>{
+              const name = ({ "1":"1m","5":"5m","15":"15m","30":"30m","60":"1H","240":"4H","D":"1D","W":"1W" }[v]||v);
+              return `<option value="${v}" ${String(st.interval)===String(v)?"selected":""}>${name}</option>`;
+            }).join("")}
+          </select>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:8px">
+        <div class="field">
+          <label>Sync Mode</label>
+          <select data-k="syncMode">
+            <option value="both" ${st.syncMode==="both"?"selected":""}>Symbol + Timeframe</option>
+            <option value="symbol" ${st.syncMode==="symbol"?"selected":""}>Only Symbol</option>
+            <option value="tf" ${st.syncMode==="tf"?"selected":""}>Only Timeframe</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:8px">
+        <button class="btn" style="padding:9px 10px;border-radius:14px" data-act="tvApply">🔄 Apply</button>
+        <button class="btn good" style="padding:9px 10px;border-radius:14px" data-act="syncAll">🧲 Sync All</button>
+        <button class="btn good" style="padding:9px 10px;border-radius:14px" data-act="spawnMultiFromCore">➕ Multi-Chart</button>
+        <span class="hint">CORE manda sync a charts y multicharts según Sync Mode.</span>
+      </div>
+
+      <div class="tvBox">
+        <div class="tvInner" id="tv_${id}"></div>
+      </div>
+    `;
+  }
+
+  if(type==="chart"){
+    return `
+      <div class="row">
+        <div class="field">
+          <label>Symbol (TradingView)</label>
+          <input data-k="symbol" value="${safeText(st.symbol)}" placeholder="OANDA:EURUSD, BINANCE:BTCUSDT...">
+        </div>
+        <div class="field">
+          <label>Timeframe</label>
+          <select data-k="interval">
+            ${["1","5","15","30","60","240","D","W"].map(v=>{
+              const name = ({ "1":"1m","5":"5m","15":"15m","30":"30m","60":"1H","240":"4H","D":"1D","W":"1W" }[v]||v);
+              return `<option value="${v}" ${String(st.interval)===String(v)?"selected":""}>${name}</option>`;
+            }).join("")}
+          </select>
+        </div>
+      </div>
+
+      <div class="row chartControls">
+        <div class="field" style="min-width:145px;flex:0 1 170px">
+          <label>Platform</label>
+          <select data-k="platform">
+            <option value="tradingview" ${String(st.platform||"tradingview")==="tradingview"?"selected":""}>TradingView</option>
+            <option value="weltrade" ${String(st.platform||"")==="weltrade"?"selected":""}>Weltrade</option>
+          </select>
+        </div>
+        <button class="btn" style="padding:9px 10px;border-radius:14px" data-act="tvApply">🔄 Apply</button>
+        <button class="btn" style="padding:9px 10px;border-radius:14px" data-act="spawnChartChild">＋ Spawn Chart Child</button>
+        <span class="hint">Chart independiente con tamaño y plataforma propia.</span>
+      </div>
+
+      <div class="row chartControls">
+        <div class="sizeGroup">
+          <button class="mini" data-act="chartSize" data-size="small">S</button>
+          <button class="mini" data-act="chartSize" data-size="medium">M</button>
+          <button class="mini" data-act="chartSize" data-size="large">L</button>
+          <button class="mini" data-act="chartFull">⛶ Full Screen</button>
+        </div>
+        <span class="hint">Tamaños: Small / Medium / Large / Full Screen.</span>
+      </div>
+
+      <div class="tvBox">
+        <div class="tvInner" id="tv_${id}"></div>
+      </div>
+    `;
+  }
+
+  if(type==="multichart"){
+    const cells = Array.isArray(st.cells) ? st.cells : ["240","60","15","1"];
+    const labels = ["4H","1H","15m","1m"];
+    return `
+      <div class="row">
+        <div class="field" style="flex:2 1 240px">
+          <label>Symbol</label>
+          <input data-k="symbol" value="${safeText(st.symbol)}" placeholder="OANDA:EURUSD, BINANCE:BTCUSDT...">
+        </div>
+        <div class="field" style="min-width:145px;flex:0 1 170px">
+          <label>Platform</label>
+          <select data-k="platform">
+            <option value="tradingview" ${String(st.platform||"tradingview")==="tradingview"?"selected":""}>TradingView</option>
+            <option value="weltrade" ${String(st.platform||"")==="weltrade"?"selected":""}>Weltrade</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:8px">
+        ${cells.map((v,i)=>`
+          <div class="field" style="min-width:120px;flex:1 1 120px">
+            <label>Cell ${i+1} (${labels[i]})</label>
+            <select data-k="cell_${i}">
+              ${["1","5","15","30","60","240","D","W"].map(opt=>{
+                const name = ({ "1":"1m","5":"5m","15":"15m","30":"30m","60":"1H","240":"4H","D":"1D","W":"1W" }[opt]||opt);
+                return `<option value="${opt}" ${String(v)===String(opt)?"selected":""}>${name}</option>`;
+              }).join("")}
+            </select>
+          </div>
+        `).join("")}
+      </div>
+
+      <div class="row" style="margin-top:8px">
+        <button class="btn" style="padding:9px 10px;border-radius:14px" data-act="multiApply">🔄 Apply</button>
+        <button class="btn" style="padding:9px 10px;border-radius:14px" data-act="spawnChartFromCell">＋ Spawn Chart (random cell)</button>
+        <span class="hint">4 charts dentro del mismo nodo (MTF).</span>
+      </div>
+
+      <div class="row chartControls">
+        <div class="sizeGroup">
+          <button class="mini" data-act="chartSize" data-size="small">S</button>
+          <button class="mini" data-act="chartSize" data-size="medium">M</button>
+          <button class="mini" data-act="chartSize" data-size="large">L</button>
+          <button class="mini" data-act="chartFull">⛶ Full Screen</button>
+        </div>
+        <span class="hint">El tamaño afecta el Multi-Chart completo.</span>
+      </div>
+
+      <div class="grid4">
+        ${[0,1,2,3].map(i=>`
+          <div class="cell">
+            <div class="cellHead">
+              <div><b>${labels[i]}</b> <small id="mc_lbl_${id}_${i}">${safeText(String(cells[i]))}</small></div>
+              <button class="mini" data-act="mcSpawn" data-i="${i}" title="Crear chart hijo desde esta celda">＋</button>
+            </div>
+            <div class="cellBody"><div id="tv_${id}_${i}"></div></div>
+          </div>
+        `).join("")}
+      </div>
+    `;
+  }
+
+  if(type==="session"){
+    return `
+      <div class="row">
+        <div class="field">
+          <label>Session</label>
+          <select data-k="session">
+            <option value="asia" ${st.session==="asia"?"selected":""}>Asia</option>
+            <option value="london" ${st.session==="london"?"selected":""}>London</option>
+            <option value="ny" ${st.session==="ny"?"selected":""}>New York</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Auto Workspace</label>
+          <select data-k="autoWorkspace">
+            <option value="true" ${String(st.autoWorkspace)==="true"?"selected":""}>On</option>
+            <option value="false" ${String(st.autoWorkspace)==="false"?"selected":""}>Off</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Workspace</label>
+          <select data-k="workspace">
+            <option value="london" ${st.workspace==="london"?"selected":""}>London</option>
+            <option value="ny" ${st.workspace==="ny"?"selected":""}>New York</option>
+            <option value="research" ${st.workspace==="research"?"selected":""}>Research</option>
+            <option value="free" ${st.workspace==="free"?"selected":""}>Free</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field" style="margin-top:8px">
+        <label>Notes / Plan</label>
+        <textarea data-k="notes">${safeText(st.notes||"")}</textarea>
+      </div>
+
+      <div class="row" style="margin-top:8px">
+        <button class="btn good" style="padding:9px 10px;border-radius:14px" data-act="sessionApply">⚡ Apply Session</button>
+        <button class="btn" style="padding:9px 10px;border-radius:14px" data-act="spawnSessionPack">＋ Spawn Session Pack</button>
+        <span class="hint">Aplica workspace y puede crear pack: Multi-Chart + Calendar + News + Notes.</span>
+      </div>
+
+      <div class="item" style="margin-top:10px">
+        <small>Now:</small>
+        <div class="hint" id="sessNow_${id}">—</div>
+      </div>
+    `;
+  }
+
+  if(type==="news" || type==="calendar"){
+    const isCal = (type==="calendar");
+    return `
+      <div class="row">
+        <div class="field">
+          <label>Feed</label>
+          <select data-k="feed">
+            <option value="myfxbook_news" ${st.feed==="myfxbook_news"?"selected":""}>Myfxbook • Forex News (RSS)</option>
+            <option value="myfxbook_calendar" ${st.feed==="myfxbook_calendar"?"selected":""}>Myfxbook • Economic Calendar (RSS)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Items</label>
+          <select data-k="limit">
+            ${[5,10,15,20,30].map(n=>`<option value="${n}" ${String(st.limit)===String(n)?"selected":""}>${n}</option>`).join("")}
+          </select>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:8px">
+        <div class="field" style="flex:2 1 220px">
+          <label>Filter (keyword)</label>
+          <input data-k="filter" value="${safeText(st.filter||"")}" placeholder="${isCal ? "USD, EUR, CPI, FOMC, NFP..." : "BTC, rate, inflation..."}">
+        </div>
+        <button class="btn" style="padding:9px 10px;border-radius:14px; align-self:flex-end" data-act="feedRefresh">🔄 Refresh</button>
+        <button class="btn" style="padding:9px 10px;border-radius:14px; align-self:flex-end" data-act="spawnFeedChild">＋ Spawn ${isCal?"Calendar":"News"} Child</button>
+      </div>
+
+      <div class="list" id="feed_${id}">
+        <div class="item"><small>Cargando…</small></div>
+      </div>
+    `;
+  }
+
+  if(type==="watchlist"){
+    return `
+      <div class="field">
+        <label>Título</label>
+        <input data-k="title" value="${safeText(st.title)}">
+      </div>
+
+      <div class="field" style="margin-top:8px">
+        <label>Pares (uno por línea) — click crea Chart hijo</label>
+        <textarea data-k="items" placeholder="OANDA:EURUSD&#10;BINANCE:BTCUSDT">${safeText(st.items||"")}</textarea>
+      </div>
+
+      <div class="row" style="margin-top:8px">
+        <button class="btn" style="padding:9px 10px;border-radius:14px" data-act="watchRender">🔄 Render</button>
+        <button class="btn" style="padding:9px 10px;border-radius:14px" data-act="spawnWatchChild">＋ Spawn Watch Child</button>
+        <span class="hint">Tip: Usa símbolos de TradingView (OANDA:, BINANCE:, FX_IDC:, etc.)</span>
+      </div>
+
+      <div class="tags" id="watch_${id}"></div>
+    `;
+  }
+
+  if(type==="snapshots"){
+    return `
+      <div class="row">
+        <div class="field" style="flex:2 1 220px">
+          <label>Nota (opcional)</label>
+          <input id="snapNote_${id}" placeholder="ej: setup liquidez + retest OB">
+        </div>
+        <button class="btn good" style="padding:9px 10px;border-radius:14px; align-self:flex-end" data-act="snapSave">📸 Save Snapshot</button>
+      </div>
+
+      <div class="row" style="margin-top:8px">
+        <button class="btn" style="padding:9px 10px;border-radius:14px" data-act="snapExport">⬇️ Export Snapshots</button>
+        <button class="btn bad" style="padding:9px 10px;border-radius:14px" data-act="snapClear">🧹 Clear</button>
+        <span class="hint">Guarda: symbol, timeframe, fecha, nota.</span>
+      </div>
+
+      <div class="list" id="snaps_${id}"></div>
+    `;
+  }
+
+  if(type==="strategy"){
+    return `
+      <div class="row">
+        <div class="field">
+          <label>Template</label>
+          <select data-k="template">
+            <option value="ema_smc" ${st.template==="ema_smc"?"selected":""}>EMA + SMC (tu estilo)</option>
+            <option value="liquidity_50" ${st.template==="liquidity_50"?"selected":""}>Market Structure + 50% + Liquidity Sweep</option>
+            <option value="scalp_pack" ${st.template==="scalp_pack"?"selected":""}>Scalp Pack (Charts + News + Notes + Alerts)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Título</label>
+          <input data-k="title" value="${safeText(st.title)}">
+        </div>
+      </div>
+
+      <div class="field" style="margin-top:8px">
+        <label>Notas / Parámetros</label>
+        <textarea data-k="notes">${safeText(st.notes||"")}</textarea>
+      </div>
+
+      <div class="row" style="margin-top:8px">
+        <button class="btn good" style="padding:9px 10px;border-radius:14px" data-act="stratRun">🚀 Generate Nodes</button>
+        <button class="btn" style="padding:9px 10px;border-radius:14px" data-act="spawnStratChild">＋ Spawn Strategy Child</button>
+        <span class="hint">Genera nodos hijos según template.</span>
+      </div>
+
+      <div class="item" style="margin-top:10px">
+        <small>Last run:</small>
+        <div class="hint" id="stratLast_${id}">${safeText(st.lastRun||"—")}</div>
+      </div>
+    `;
+  }
+
+  if(type==="alerts"){
+    return `
+      <div class="row">
+        <div class="field">
+          <label>Enabled</label>
+          <select data-k="enabled">
+            <option value="false" ${String(st.enabled)==="false"?"selected":""}>Off</option>
+            <option value="true" ${String(st.enabled)==="true"?"selected":""}>On</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Mode</label>
+          <select data-k="mode">
+            <option value="crypto" ${st.mode==="crypto"?"selected":""}>Crypto (CoinGecko)</option>
+            <option value="manual" ${st.mode==="manual"?"selected":""}>Manual price</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Every (sec)</label>
+          <select data-k="everySec">
+            ${[5,10,15,30,60].map(n=>`<option value="${n}" ${String(st.everySec)===String(n)?"selected":""}>${n}</option>`).join("")}
+          </select>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:8px">
+        <div class="field">
+          <label>Crypto id (CoinGecko)</label>
+          <input data-k="symbol" value="${safeText(st.symbol||"bitcoin")}" placeholder="bitcoin, ethereum, solana...">
+        </div>
+        <div class="field">
+          <label>Manual price</label>
+          <input data-k="manualPrice" value="${safeText(st.manualPrice||"")}" placeholder="ej: 65000">
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:8px">
+        <button class="btn" style="padding:9px 10px;border-radius:14px" data-act="alertAdd">➕ Add rule</button>
+        <button class="btn" style="padding:9px 10px;border-radius:14px" data-act="alertTest">🧪 Test notify</button>
+        <button class="btn warn" style="padding:9px 10px;border-radius:14px" data-act="alertRun">▶ Run</button>
+        <button class="btn bad" style="padding:9px 10px;border-radius:14px" data-act="alertStop">⏹ Stop</button>
+      </div>
+
+      <div class="list" id="alerts_${id}"></div>
+      <div class="hint" style="margin-top:8px">Notificaciones requieren permiso (Chrome: candado → Notifications).</div>
+    `;
+  }
+
+  if(type==="journal"){
+    return `
+      <div class="row">
+        <div class="field">
+          <label>Symbol</label>
+          <input id="j_sym_${id}" placeholder="OANDA:EURUSD">
+        </div>
+        <div class="field">
+          <label>TF</label>
+          <select id="j_tf_${id}">
+            ${["1","5","15","30","60","240","D","W"].map(v=>{
+              const name = ({ "1":"1m","5":"5m","15":"15m","30":"30m","60":"1H","240":"4H","D":"1D","W":"1W" }[v]||v);
+              return `<option value="${v}">${name}</option>`;
+            }).join("")}
+          </select>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:8px">
+        <div class="field">
+          <label>Entry</label>
+          <input id="j_entry_${id}" placeholder="1.0850">
+        </div>
+        <div class="field">
+          <label>SL</label>
+          <input id="j_sl_${id}" placeholder="1.0830">
+        </div>
+        <div class="field">
+          <label>TP</label>
+          <input id="j_tp_${id}" placeholder="1.0900">
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:8px">
+        <div class="field" style="flex:2 1 220px">
+          <label>Result</label>
+          <select id="j_res_${id}">
+            <option value="open">Open</option>
+            <option value="win">Win</option>
+            <option value="loss">Loss</option>
+            <option value="be">BE</option>
+          </select>
+        </div>
+        <div class="field" style="flex:3 1 260px">
+          <label>Notes</label>
+          <input id="j_note_${id}" placeholder="setup, liquidez, OB, etc">
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:8px">
+        <button class="btn good" style="padding:9px 10px;border-radius:14px" data-act="jAdd">➕ Add Trade</button>
+        <button class="btn" style="padding:9px 10px;border-radius:14px" data-act="jFromCore">🎯 From CORE</button>
+        <button class="btn" style="padding:9px 10px;border-radius:14px" data-act="jExport">⬇️ Export</button>
+        <button class="btn bad" style="padding:9px 10px;border-radius:14px" data-act="jClear">🧹 Clear</button>
+      </div>
+
+      <div class="list" id="journal_${id}"></div>
+      <div class="hint" style="margin-top:8px">Cada fila puede abrir chart desde el journal.</div>
+    `;
+  }
+
+  if(type==="recorder"){
+    return `
+      <div class="item">
+        <div style="font-weight:650">🎥 Grabador por ventana / pestaña / chart</div>
+        <div class="hint" style="margin-top:6px">
+          Al presionar Start, el navegador te deja escoger qué quieres grabar: pestaña completa, ventana, pantalla o el chart separado si lo tienes en otra ventana.
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:8px">
+        <div class="field">
+          <label>Audio</label>
+          <select data-k="includeAudio">
+            <option value="true" ${String(st.includeAudio)!=="false"?"selected":""}>Con audio si el navegador lo permite</option>
+            <option value="false" ${String(st.includeAudio)==="false"?"selected":""}>Sin audio</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Calidad</label>
+          <select data-k="quality">
+            <option value="light" ${st.quality==="light"?"selected":""}>Light</option>
+            <option value="standard" ${st.quality==="standard"?"selected":""}>Standard</option>
+            <option value="high" ${st.quality==="high"?"selected":""}>High</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:8px">
+        <button class="btn good" style="padding:9px 10px;border-radius:14px" data-act="recStart">● Start Recording</button>
+        <button class="btn bad" style="padding:9px 10px;border-radius:14px" data-act="recStop">■ Stop</button>
+        <button class="btn" style="padding:9px 10px;border-radius:14px" data-act="recClear">🧹 Clear List</button>
+      </div>
+
+      <div class="item" style="margin-top:10px">
+        <small>Status:</small>
+        <div class="hint" id="rec_status_${id}">Ready. Esperando grabación.</div>
+      </div>
+
+      <div class="list" id="rec_list_${id}"></div>
+    `;
+  }
+
+  if(type==="notes"){
+    return `
+      <div class="field">
+        <label>Título</label>
+        <input data-k="title" value="${safeText(st.title)}">
+      </div>
+      <div class="field" style="margin-top:8px">
+        <label>Notas</label>
+        <textarea data-k="text">${safeText(st.text)}</textarea>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn" style="padding:9px 10px;border-radius:14px" data-act="spawnNoteChild">＋ Spawn Note Child</button>
+        <span class="hint">Checklist de estrategia, journal, reglas, etc.</span>
+      </div>
+    `;
+  }
+
+  return `<div class="hint">Nodo.</div>`;
+}
+
+/* Placement + DOM sync */
+function getNodeEl(id){ return document.querySelector(`.node[data-id="${id}"]`); }
+function syncNodeDOM(id){
+  const m = Engine.nodes.get(id);
+  const el = getNodeEl(id);
+  if(!m || !el) return;
+  el.style.left = m.x + "px";
+  el.style.top  = m.y + "px";
+  el.style.width = m.w + "px";
+}
+function smartPlaceAroundParent(childId, parentId){
+  const child = Engine.nodes.get(childId);
+  const parent = Engine.nodes.get(parentId);
+  if(!child || !parent) return;
+
+  const sr = stageRect();
+  const parentEl = getNodeEl(parentId);
+  const pBox = parentEl ? centerOf(parentEl) : {x: parent.x + parent.w/2, y: parent.y + parent.h/2};
+
+  let radius = 40;
+  let tries = 0;
+  parent.angleIndex = (parent.angleIndex ?? 0) + 1;
+  const baseAngle = parent.angleIndex * Engine.golden;
+
+  while(tries < 90){
+    const a = baseAngle + tries * 0.35;
+    const cx = pBox.x + Math.cos(a) * radius;
+    const cy = pBox.y + Math.sin(a) * radius;
+
+    const x = cx - child.w/2;
+    const y = cy - 44;
+
+    const candidate = { x: clamp(x, 10, sr.width - child.w - 10), y: clamp(y, 64, sr.height - child.h - 10), w: child.w, h: child.h };
+
+    let ok = true;
+    for(const [id, n] of Engine.nodes){
+      if(id === childId) continue;
+      const r = {x:n.x,y:n.y,w:n.w,h:n.h};
+      if(intersects(candidate, r, 14)){ ok=false; break; }
+    }
+    if(ok){ child.x = candidate.x; child.y = candidate.y; return; }
+
+    tries++;
+    if(tries % 10 === 0) radius += 55;
+  }
+
+  child.x = clamp(parent.x + parent.w + 20, 10, sr.width - child.w - 10);
+  child.y = clamp(parent.y, 64, sr.height - child.h - 10);
+}
+
+
+/* Bind node */
+function bindNode(id){
+  const el = getNodeEl(id);
+  const m = Engine.nodes.get(id);
+  if(!el || !m) return;
+
+  el.addEventListener("pointerdown", ()=>{ el.style.zIndex = (++Engine.z).toString(); });
+
+  el.addEventListener("click", (e)=>{
+    const btn = e.target.closest("[data-act]");
+    if(!btn) return;
+    const act = btn.dataset.act;
+
+    if(act==="front"){ e.preventDefault(); e.stopPropagation(); el.style.zIndex = (++Engine.z).toString(); return; }
+    if(act==="del"){
+      e.preventDefault();
+      e.stopPropagation();
+      const nodeNow = Engine.nodes.get(id);
+      if(nodeNow && nodeNow.state) nodeNow.state.chartFull = false;
+      if(confirm("¿Eliminar este nodo y sus conexiones?")) removeNode(id);
+      return;
+    }
+    if(act==="spawn"){ e.preventDefault(); e.stopPropagation(); spawnMenu(id); return; }
+
+    // charts
+    if(act==="chartSize"){ setChartSize(id, btn.dataset.size || "medium"); saveAuto(); return; }
+    if(act==="chartFull"){ toggleChartFull(id); saveAuto(); return; }
+    if(act==="tvApply"){ pullFieldsIntoState(id); applyChartShell(id); renderTradingViewWidget(id); saveAuto(); return; }
+    if(act==="spawnChartChild"){
+      pullFieldsIntoState(id);
+      createNode({type:"chart", parentId:id, state:{symbol:m.state.symbol, interval:m.state.interval, title:"Chart Child"}});
+      saveAuto(); return;
+    }
+
+    // CORE sync
+    if(act==="syncAll"){ pullFieldsIntoState(id); syncAllFromCore(id); saveAuto(); return; }
+    if(act==="spawnMultiFromCore"){
+      pullFieldsIntoState(id);
+      createNode({type:"multichart", parentId:id, state:{symbol:m.state.symbol, title:"Multi-Chart", cells:["240","60","15","1"]}});
+      saveAuto(); return;
+    }
+
+    // multichart
+    if(act==="multiApply"){ pullFieldsIntoState(id); applyChartShell(id); renderMultiChart(id); saveAuto(); return; }
+    if(act==="spawnChartFromCell"){
+      pullFieldsIntoState(id);
+      const cells = getMultiCellsFromState(m.state);
+      const tf = pick(cells);
+      createNode({type:"chart", parentId:id, state:{title:`Chart ${tf}`, symbol:m.state.symbol, interval:tf}});
+      saveAuto(); return;
+    }
+    if(act==="mcSpawn"){
+      pullFieldsIntoState(id);
+      const idx = Number(btn.dataset.i);
+      const cells = getMultiCellsFromState(m.state);
+      const tf = cells[idx] || "15";
+      createNode({type:"chart", parentId:id, state:{title:`Chart ${tf}`, symbol:m.state.symbol, interval:tf}});
+      saveAuto(); return;
+    }
+
+    // feed
+    if(act==="feedRefresh"){ pullFieldsIntoState(id); loadFeed(id); saveAuto(); return; }
+    if(act==="spawnFeedChild"){
+      pullFieldsIntoState(id);
+      const childType = (m.state.feed==="myfxbook_calendar") ? "calendar" : "news";
+      createNode({type:childType, parentId:id, state:{feed:m.state.feed, limit:m.state.limit, filter:m.state.filter, title:(childType==="calendar"?"Calendar Child":"News Child")}});
+      saveAuto(); return;
+    }
+
+    // watchlist
+    if(act==="watchRender"){ pullFieldsIntoState(id); renderWatchlistTags(id); saveAuto(); return; }
+    if(act==="spawnWatchChild"){ pullFieldsIntoState(id); createNode({type:"watchlist", parentId:id, state:{items:m.state.items, title:"Watch Child"}}); saveAuto(); return; }
+
+    // snapshots
+    if(act==="snapSave"){ saveSnapshot(id); saveAuto(); return; }
+    if(act==="snapExport"){ exportSnapshots(id); return; }
+    if(act==="snapClear"){ if(confirm("¿Borrar snapshots?")){ Engine.nodes.get(id).state.list=[]; renderSnapshots(id); saveAuto(); } return; }
+
+    // strategy
+    if(act==="stratRun"){ pullFieldsIntoState(id); runStrategy(id); saveAuto(); return; }
+    if(act==="spawnStratChild"){ pullFieldsIntoState(id); createNode({type:"strategy", parentId:id, state:{template:m.state.template, title:"Strategy Child"}}); saveAuto(); return; }
+
+    // alerts
+    if(act==="alertAdd"){ pullFieldsIntoState(id); addAlertRule(id); saveAuto(); return; }
+    if(act==="alertTest"){ testNotify("Tech Blue Alerts", "Test OK ✅"); return; }
+    if(act==="alertRun"){ pullFieldsIntoState(id); startAlerts(id); saveAuto(); return; }
+    if(act==="alertStop"){ stopAlerts(id); saveAuto(); return; }
+
+    // session
+    if(act==="sessionApply"){ pullFieldsIntoState(id); applySession(id); saveAuto(); return; }
+    if(act==="spawnSessionPack"){ pullFieldsIntoState(id); spawnSessionPack(id); saveAuto(); return; }
+
+    // recorder
+    if(act==="recStart"){ pullFieldsIntoState(id); startRecorder(id); saveAuto(); return; }
+    if(act==="recStop"){ stopRecorder(id); saveAuto(); return; }
+    if(act==="recClear"){ clearRecorderClips(id); saveAuto(); return; }
+
+    // notes
+    if(act==="spawnNoteChild"){ pullFieldsIntoState(id); createNode({type:"notes", parentId:id, state:{title:"Notes Child", text:""}}); saveAuto(); return; }
+
+    // journal
+    if(act==="jAdd"){ addJournalRow(id); saveAuto(); return; }
+    if(act==="jFromCore"){ fillJournalFromCore(id); saveAuto(); return; }
+    if(act==="jExport"){ exportJournal(id); return; }
+    if(act==="jClear"){ if(confirm("¿Borrar journal?")){ Engine.nodes.get(id).state.rows=[]; renderJournal(id); saveAuto(); } return; }
+  });
+
+  // FIX PRO: fallback directo para los botones del header.
+  // Evita que un iframe/capa de chart o el sistema de drag bloquee + / ⬆ / ✕.
+  const tools = el.querySelector(".nodeTools");
+  if(tools){
+    tools.addEventListener("pointerdown", (e)=>{
+      e.stopPropagation();
+    });
+    tools.addEventListener("click", (e)=>{
+      const btn = e.target.closest("[data-act]");
+      if(!btn) return;
+      const act = btn.dataset.act;
+      if(act!=="spawn" && act!=="front" && act!=="del") return;
+      e.preventDefault();
+      e.stopPropagation();
+      if(act==="front"){ el.style.zIndex = (++Engine.z).toString(); return; }
+      if(act==="spawn"){ spawnMenu(id); return; }
+      if(act==="del"){
+        const nodeNow = Engine.nodes.get(id);
+        if(nodeNow && nodeNow.state) nodeNow.state.chartFull = false;
+        if(confirm("¿Eliminar este nodo y sus conexiones?")) removeNode(id);
+        return;
+      }
+    }, true);
+  }
+
+  // drag
+  const head = el.querySelector("[data-drag]");
+  const sideHandles = Array.from(el.querySelectorAll("[data-side-drag]"));
+  let dragging = false;
+  let dragSource = null;
+  let sx=0, sy=0, ox=0, oy=0;
+
+  function startNodeDrag(e, source){
+    // IMPORTANTE: si el click empieza en un botón del header (+, ⬆, ✕),
+    // no activamos el drag ni capturamos el pointer. Esa captura era lo que
+    // bloqueaba los botones en algunos charts/iframes.
+    if(e.target.closest("[data-act]")){
+      e.stopPropagation();
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    dragging = true;
+    dragSource = source;
+    el.style.zIndex = (++Engine.z).toString();
+    try{ source.setPointerCapture(e.pointerId); }catch(_){}
+    sx = e.clientX; sy = e.clientY;
+    ox = m.x; oy = m.y;
+  }
+
+  function moveNodeDrag(e){
+    if(!dragging) return;
+    const sr = stageRect();
+    m.x = clamp(ox + (e.clientX - sx), 10, sr.width - m.w - 10);
+    m.y = clamp(oy + (e.clientY - sy), 64, sr.height - m.h - 10);
+    syncNodeDOM(id);
+    drawWires();
+  }
+
+  function endNodeDrag(e){
+    if(!dragging) return;
+    dragging = false;
+    try{ (dragSource || e.currentTarget).releasePointerCapture(e.pointerId); }catch(_){}
+    dragSource = null;
+    saveAuto();
+  }
+
+  head.addEventListener("pointerdown", (e)=> startNodeDrag(e, head));
+  head.addEventListener("pointermove", moveNodeDrag);
+  head.addEventListener("pointerup", endNodeDrag);
+  head.addEventListener("pointercancel", endNodeDrag);
+
+  // NUEVO: asas laterales para arrastrar cuando el chart/iframe estorba arriba.
+  sideHandles.forEach(handle=>{
+    handle.addEventListener("pointerdown", (e)=> startNodeDrag(e, handle));
+    handle.addEventListener("pointermove", moveNodeDrag);
+    handle.addEventListener("pointerup", endNodeDrag);
+    handle.addEventListener("pointercancel", endNodeDrag);
+  });
+
+  // change events
+  el.addEventListener("change", (e)=>{
+    if(!e.target.matches("input[data-k],select[data-k],textarea[data-k]")) return;
+
+    pullFieldsIntoState(id);
+
+    const nm = Engine.nodes.get(id);
+    const titleEl = el.querySelector("[data-title]");
+    if(titleEl) titleEl.textContent = nm.state.title || nm.type.toUpperCase();
+
+    if(nm.type === "chart" || nm.type === "core"){ applyChartShell(id); renderTradingViewWidget(id); }
+    if(nm.type === "multichart"){ applyChartShell(id); renderMultiChart(id); }
+    if(nm.type === "news" || nm.type === "calendar") loadFeed(id);
+    if(nm.type === "watchlist") renderWatchlistTags(id);
+    if(nm.type === "snapshots") renderSnapshots(id);
+    if(nm.type === "alerts") renderAlerts(id);
+    if(nm.type === "journal") renderJournal(id);
+    if(nm.type === "recorder") renderRecorder(id);
+    if(nm.type === "session") updateSessionNow(id);
+
+    saveAuto();
+  });
+}
+
+function pullFieldsIntoState(id){
+  const el = getNodeEl(id);
+  const m = Engine.nodes.get(id);
+  if(!el || !m) return;
+
+  $$("[data-k]", el).forEach(inp=>{
+    const k = inp.dataset.k;
+    let v = inp.value;
+
+    if(inp.tagName==="SELECT"){
+      if(k==="limit") v = Number(v);
+      if(k==="everySec") v = Number(v);
+      if(k==="enabled") v = (String(v)==="true");
+      if(k==="autoWorkspace") v = (String(v)==="true");
+    }
+
+    // multichart cell selectors
+    if(k.startsWith("cell_")){
+      const idx = Number(k.split("_")[1]);
+      m.state.cells = getMultiCellsFromState(m.state);
+      m.state.cells[idx] = v;
+      return;
+    }
+
+    m.state[k] = v;
+  });
+}
+
+function spawnMenu(parentId){
+  const pick = prompt(
+`Crear nodo hijo:
+1 = Chart
+2 = Multi-Chart
+3 = Session
+4 = News
+5 = Calendar
+6 = Notes
+7 = Watchlist
+8 = Snapshots
+9 = Strategy
+10 = Alerts
+11 = Journal
+12 = Recorder
+
+Escribe 1-12:`
+  );
+  if(pick===null) return;
+  const p = pick.trim();
+  const map = {
+    "1":"chart","2":"multichart","3":"session","4":"news","5":"calendar",
+    "6":"notes","7":"watchlist","8":"snapshots","9":"strategy","10":"alerts","11":"journal","12":"recorder"
+  };
+  if(map[p]) return createNode({type:map[p], parentId});
+}
+
+function removeNode(id){
+  stopAlerts(id);
+  stopRecorder(id, true);
+  Engine.edges = Engine.edges.filter(e => e.from!==id && e.to!==id);
+  Engine.nodes.delete(id);
+  const el = getNodeEl(id);
+  if(el) el.remove();
+  drawWires();
+  saveAuto();
+}
+
+/* Wires */
+function drawWires(){
+  const svg = $("#wires");
+  const sr = stageRect();
+  svg.setAttribute("width", sr.width);
+  svg.setAttribute("height", sr.height);
+  svg.setAttribute("viewBox", `0 0 ${sr.width} ${sr.height}`);
+  svg.innerHTML = "";
+
+  const defs = document.createElementNS("http://www.w3.org/2000/svg","defs");
+  defs.innerHTML = `
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2.2" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  `;
+  svg.appendChild(defs);
+
+  for(const e of Engine.edges){
+    const aEl = getNodeEl(e.from);
+    const bEl = getNodeEl(e.to);
+    if(!aEl || !bEl) continue;
+
+    const A = centerOf(aEl);
+    const B = centerOf(bEl);
+
+    const ax = (A.x - sr.left);
+    const ay = (A.y - sr.top);
+    const bx = (B.x - sr.left);
+    const by = (B.y - sr.top);
+
+    const path = document.createElementNS("http://www.w3.org/2000/svg","path");
+    const dx = Math.abs(bx-ax);
+    const c1x = ax + dx * 0.35;
+    const c1y = ay;
+    const c2x = bx - dx * 0.35;
+    const c2y = by;
+
+    path.setAttribute("d", `M ${ax} ${ay} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${bx} ${by}`);
+    path.setAttribute("fill","none");
+    path.setAttribute("stroke","rgba(79,155,255,.45)");
+    path.setAttribute("stroke-width","2");
+    path.setAttribute("filter","url(#glow)");
+    svg.appendChild(path);
+
+    const dot = document.createElementNS("http://www.w3.org/2000/svg","circle");
+    dot.setAttribute("cx", bx);
+    dot.setAttribute("cy", by);
+    dot.setAttribute("r", "4");
+    dot.setAttribute("fill","rgba(74,195,255,.85)");
+    dot.setAttribute("filter","url(#glow)");
+    svg.appendChild(dot);
+  }
+}
+
+window.addEventListener("resize", ()=>{
+  const sr = stageRect();
+  for(const [id, m] of Engine.nodes){
+    m.x = clamp(m.x, 10, sr.width - m.w - 10);
+    m.y = clamp(m.y, 64, sr.height - m.h - 10);
+    syncNodeDOM(id);
+  }
+  drawWires();
+});
+
+
+/* =========================================================
+   Chart Size + Platform Shell
+========================================================= */
+function normalizeChartSize(size){
+  return ["small","medium","large"].includes(String(size)) ? String(size) : "medium";
+}
+function applyChartShell(nodeId){
+  const m = Engine.nodes.get(nodeId);
+  const el = getNodeEl(nodeId);
+  if(!m || !el) return;
+  if(m.type!=="chart" && m.type!=="multichart") return;
+
+  const size = normalizeChartSize(m.state.chartSize || "medium");
+  m.state.chartSize = size;
+  m.state.chartFull = !!m.state.chartFull;
+
+  el.classList.remove("chart-small","chart-medium","chart-large","chart-full");
+  el.classList.add("chart-" + size);
+  if(m.state.chartFull) el.classList.add("chart-full");
+
+  if(!m.state.chartFull){
+    const widths = m.type === "chart"
+      ? {small:380, medium:560, large:820}
+      : {small:520, medium:760, large:1040};
+    m.w = widths[size] || widths.medium;
+    el.style.width = m.w + "px";
+    const sr = stageRect();
+    m.x = clamp(m.x, 10, sr.width - Math.min(m.w, sr.width-20) - 10);
+    syncNodeDOM(nodeId);
+    drawWires();
+  }
+}
+function setChartSize(nodeId, size){
+  const m = Engine.nodes.get(nodeId);
+  if(!m) return;
+  m.state.chartSize = normalizeChartSize(size);
+  m.state.chartFull = false;
+  applyChartShell(nodeId);
+  if(m.type === "chart") renderTradingViewWidget(nodeId);
+  if(m.type === "multichart") renderMultiChart(nodeId);
+}
+function toggleChartFull(nodeId){
+  const m = Engine.nodes.get(nodeId);
+  if(!m) return;
+  m.state.chartFull = !m.state.chartFull;
+  applyChartShell(nodeId);
+  setTimeout(()=>{
+    if(m.type === "chart") renderTradingViewWidget(nodeId);
+    if(m.type === "multichart") renderMultiChart(nodeId);
+  }, 60);
+}
+function renderWeltradeWidget(mount){
+  if(!mount) return;
+  while (mount.firstChild) mount.removeChild(mount.firstChild);
+  const iframe = document.createElement("iframe");
+  iframe.className = "weltradeFrame";
+  iframe.title = "Weltrade Chart";
+  iframe.loading = "lazy";
+  iframe.allow = "fullscreen; clipboard-read; clipboard-write";
+  iframe.referrerPolicy = "no-referrer-when-downgrade";
+  iframe.src = "https://www.weltrade.com/tools/charts/";
+  mount.appendChild(iframe);
+}
+
+/* =========================================================
+   TradingView/Weltrade render (timeframe reliable)
+========================================================= */
+function renderTradingViewWidget(nodeId, mountOverride=null, symbolOverride=null, intervalOverride=null){
+  const m = Engine.nodes.get(nodeId);
+  if(!m && !mountOverride) return;
+
+  const mount = mountOverride || document.getElementById("tv_" + nodeId);
+  if(!mount) return;
+
+  const platform = (m?.state?.platform || "tradingview").toString().trim().toLowerCase();
+  if(platform === "weltrade"){
+    renderWeltradeWidget(mount);
+    return;
+  }
+
+  while (mount.firstChild) mount.removeChild(mount.firstChild);
+
+  const inner = document.createElement("div");
+  inner.style.width = "100%";
+  inner.style.height = "100%";
+  mount.appendChild(inner);
+
+  const interval = (intervalOverride ?? m?.state?.interval ?? "60").toString().trim() || "60";
+  const symbol = (symbolOverride ?? m?.state?.symbol ?? "OANDA:EURUSD").toString().trim() || "OANDA:EURUSD";
+
+  const cfg = {
+    autosize: true,
+    symbol,
+    interval,
+    timezone: "Etc/UTC",
+    theme: "dark",
+    style: "1",
+    locale: "en",
+    enable_publishing: false,
+    hide_top_toolbar: false,
+    hide_legend: false,
+    allow_symbol_change: true,
+    save_image: true,
+    calendar: true,
+    support_host: "https://www.tradingview.com"
+  };
+
+  const script = document.createElement("script");
+  script.type = "text/javascript";
+  script.src = "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js";
+  script.async = true;
+  script.text = JSON.stringify(cfg);
+
+  requestAnimationFrame(() => inner.appendChild(script));
+}
+
+/* Multi-Chart */
+function getMultiCellsFromState(st){
+  const base = Array.isArray(st.cells) ? st.cells.slice(0,4) : ["240","60","15","1"];
+  while(base.length<4) base.push("15");
+  return base;
+}
+function renderMultiChart(nodeId){
+  const m = Engine.nodes.get(nodeId);
+  if(!m) return;
+
+  const sym = (m.state.symbol || "OANDA:EURUSD").toString().trim() || "OANDA:EURUSD";
+  const cells = getMultiCellsFromState(m.state);
+  m.state.cells = cells;
+
+  for(let i=0;i<4;i++){
+    const mount = document.getElementById(`tv_${nodeId}_${i}`);
+    if(mount){
+      renderTradingViewWidget(nodeId, mount, sym, cells[i]);
+    }
+    const lbl = document.getElementById(`mc_lbl_${nodeId}_${i}`);
+    if(lbl) lbl.textContent = String(cells[i]);
+  }
+}
+
+/* CORE sync advanced */
+function getCoreIdOrNull(){ for(const [id, n] of Engine.nodes){ if(n.type==="core") return id; } return null; }
+function syncAllFromCore(coreId){
+  const core = Engine.nodes.get(coreId);
+  if(!core) return;
+
+  const mode = (core.state.syncMode || "both").toString();
+  const sym = (core.state.symbol||"").trim();
+  const tf  = (core.state.interval||"").toString().trim();
+
+  // charts
+  for(const [id, n] of Engine.nodes){
+    if(n.type === "chart"){
+      if(mode==="both" || mode==="symbol") n.state.symbol = sym;
+      if(mode==="both" || mode==="tf") n.state.interval = tf;
+
+      const el = getNodeEl(id);
+      if(el){
+        const symInp = el.querySelector('input[data-k="symbol"]');
+        const tfSel  = el.querySelector('select[data-k="interval"]');
+        if(symInp && (mode==="both" || mode==="symbol")) symInp.value = sym;
+        if(tfSel && (mode==="both" || mode==="tf")) tfSel.value = tf;
+      }
+      renderTradingViewWidget(id);
+    }
+
+    if(n.type === "multichart"){
+      if(mode==="both" || mode==="symbol"){
+        n.state.symbol = sym;
+        const el = getNodeEl(id);
+        const symInp = el?.querySelector('input[data-k="symbol"]');
+        if(symInp) symInp.value = sym;
+      }
+      // timeframe sync for multichart: only if tf mode -> set ALL cells to core tf
+      if(mode==="both" || mode==="tf"){
+        n.state.cells = [tf, tf, tf, tf];
+        const el = getNodeEl(id);
+        if(el){
+          for(let i=0;i<4;i++){
+            const sel = el.querySelector(`select[data-k="cell_${i}"]`);
+            if(sel) sel.value = tf;
+          }
+        }
+      }
+      renderMultiChart(id);
+    }
+  }
+}
+
+/* =========================================================
+   Feed (News/Calendar) with filter
+========================================================= */
+const FEEDS = {
+  myfxbook_news: "https://www.myfxbook.com/rss/latest-forex-news",
+  myfxbook_calendar: "https://www.myfxbook.com/rss/forex-economic-calendar-events"
+};
+
+async function loadFeed(nodeId){
+  const m = Engine.nodes.get(nodeId);
+  const box = document.getElementById("feed_" + nodeId);
+  if(!m || !box) return;
+
+  const feedUrl = FEEDS[m.state.feed] || FEEDS.myfxbook_news;
+  const limit = Number(m.state.limit || 10);
+  const filter = (m.state.filter||"").trim().toLowerCase();
+
+  box.innerHTML = `<div class="item"><small>Cargando…</small></div>`;
+
+  try{
+    const xmlText = await fetch(allOrigins(feedUrl), {cache:"no-store"}).then(r=>r.text());
+    const doc = new DOMParser().parseFromString(xmlText, "text/xml");
+    let items = Array.from(doc.querySelectorAll("item"));
+
+    if(filter){
+      items = items.filter(it=>{
+        const title = (it.querySelector("title")?.textContent||"").toLowerCase();
+        const desc  = (it.querySelector("description")?.textContent||"").toLowerCase();
+        return title.includes(filter) || desc.includes(filter);
+      });
+    }
+
+    items = items.slice(0, limit);
+
+    if(!items.length){
+      box.innerHTML = `<div class="item"><small>No hay items con ese filtro.</small></div>`;
+      return;
+    }
+
+    box.innerHTML = items.map(it=>{
+      const title = it.querySelector("title")?.textContent?.trim() || "Untitled";
+      const link  = it.querySelector("link")?.textContent?.trim() || "#";
+      const pub   = it.querySelector("pubDate")?.textContent?.trim() || "";
+      const desc  = it.querySelector("description")?.textContent?.trim() || "";
+      const short = desc.replace(/<[^>]+>/g,"").slice(0, 180);
+
+      return `
+        <div class="item">
+          <div style="font-weight:650; font-size:12.5px; line-height:1.25">${safeText(title)}</div>
+          <small>${safeText(pub)}</small><br>
+          <div class="hint" style="margin-top:6px">${safeText(short)}${short.length>=180?"…":""}</div>
+          <div style="margin-top:8px">
+            <a href="${safeText(link)}" target="_blank" rel="noopener">Abrir</a>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }catch(err){
+    box.innerHTML = `
+      <div class="item">
+        <div style="font-weight:650">Error cargando RSS</div>
+        <div class="hint">${safeText(String(err))}</div>
+        <div class="hint" style="margin-top:6px">Tip: si el proxy o feed se cae, luego cambiamos fuente.</div>
+      </div>
+    `;
+  }
+}
+
+/* Watchlist */
+function guessTimeframeFromCore(){
+  const coreId = getCoreIdOrNull();
+  if(!coreId) return null;
+  return Engine.nodes.get(coreId)?.state?.interval?.toString() || null;
+}
+function renderWatchlistTags(nodeId){
+  const m = Engine.nodes.get(nodeId);
+  const box = document.getElementById("watch_" + nodeId);
+  if(!m || !box) return;
+
+  const items = (m.state.items||"").split("\n").map(s=>s.trim()).filter(Boolean);
+  if(!items.length){
+    box.innerHTML = `<div class="hint">Agrega símbolos (uno por línea) y dale Render.</div>`;
+    return;
+  }
+
+  box.innerHTML = items.map(sym=>`<button class="tag" data-sym="${safeText(sym)}" title="Crear chart hijo">${safeText(sym)}</button>`).join("");
+
+  box.onclick = (e)=>{
+    const btn = e.target.closest(".tag[data-sym]");
+    if(!btn) return;
+    const sym = btn.dataset.sym;
+    const tf = guessTimeframeFromCore() || "15";
+    createNode({type:"chart", parentId: nodeId, state:{title:sym, symbol:sym, interval:tf}});
+    saveAuto();
+  };
+}
+
+/* Snapshots */
+function saveSnapshot(snapNodeId){
+  const snapNode = Engine.nodes.get(snapNodeId);
+  if(!snapNode) return;
+
+  const noteEl = document.getElementById("snapNote_" + snapNodeId);
+  const note = (noteEl?.value || "").trim();
+
+  let sym = "";
+  let tf  = "";
+  const coreId = getCoreIdOrNull();
+  if(coreId){
+    const c = Engine.nodes.get(coreId);
+    sym = (c.state.symbol||"").trim();
+    tf  = (c.state.interval||"").toString().trim();
+  }else{
+    for(const [id,n] of Engine.nodes){
+      if(n.type==="chart"){ sym=(n.state.symbol||"").trim(); tf=(n.state.interval||"").toString().trim(); break; }
+    }
+  }
+
+  const entry = { at: nowISO(), symbol: sym || "—", interval: tf || "—", note };
+  snapNode.state.list = Array.isArray(snapNode.state.list) ? snapNode.state.list : [];
+  snapNode.state.list.unshift(entry);
+
+  if(noteEl) noteEl.value = "";
+  renderSnapshots(snapNodeId);
+}
+function renderSnapshots(snapNodeId){
+  const m = Engine.nodes.get(snapNodeId);
+  const box = document.getElementById("snaps_" + snapNodeId);
+  if(!m || !box) return;
+
+  const list = Array.isArray(m.state.list) ? m.state.list : [];
+  if(!list.length){
+    box.innerHTML = `<div class="item"><small>No snapshots aún.</small></div>`;
+    return;
+  }
+
+  box.innerHTML = list.slice(0, 50).map((s, idx)=>`
+    <div class="item">
+      <div style="font-weight:650">${safeText(s.symbol)} • ${safeText(s.interval)}</div>
+      <small>${safeText(s.at)}</small>
+      <div class="hint" style="margin-top:6px">${safeText(s.note||"")}</div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn" style="padding:7px 9px;border-radius:12px" data-act="snapOpen" data-idx="${idx}">📈 Open Chart</button>
+        <button class="btn bad" style="padding:7px 9px;border-radius:12px" data-act="snapDel" data-idx="${idx}">🗑️</button>
+      </div>
+    </div>
+  `).join("");
+
+  box.onclick = (e)=>{
+    const openBtn = e.target.closest('[data-act="snapOpen"]');
+    const delBtn  = e.target.closest('[data-act="snapDel"]');
+    if(openBtn){
+      const i = Number(openBtn.dataset.idx);
+      const s = list[i];
+      if(!s) return;
+      createNode({type:"chart", parentId:snapNodeId, state:{title:"Snapshot", symbol:s.symbol, interval:String(s.interval)}});
+      saveAuto();
+      return;
+    }
+    if(delBtn){
+      const i = Number(delBtn.dataset.idx);
+      if(!Number.isFinite(i)) return;
+      m.state.list.splice(i,1);
+      renderSnapshots(snapNodeId);
+      saveAuto();
+      return;
+    }
+  };
+}
+function exportSnapshots(snapNodeId){
+  const m = Engine.nodes.get(snapNodeId);
+  const list = Array.isArray(m?.state?.list) ? m.state.list : [];
+  const blob = new Blob([JSON.stringify({exportedAt:nowISO(), snapshots:list}, null, 2)], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "techblue-snapshots.json";
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 1500);
+}
+
+/* Strategy templates */
+function runStrategy(nodeId){
+  const m = Engine.nodes.get(nodeId);
+  if(!m) return;
+
+  const tf = guessTimeframeFromCore() || "15";
+  const coreId = getCoreIdOrNull();
+  const coreSym = coreId ? (Engine.nodes.get(coreId).state.symbol||"OANDA:EURUSD") : "OANDA:EURUSD";
+  const tpl = m.state.template;
+
+  if(tpl === "ema_smc"){
+    createNode({type:"multichart", parentId:nodeId, state:{title:"MTF (EMA/SMC)", symbol:coreSym, cells:["240","60","15","1"]}});
+    createNode({type:"notes", parentId:nodeId, state:{title:"Rules", text:
+`EMA Trend Filter:
+- 13 EMA vs 50 EMA define tendencia
+Entrada 1m:
+- EMA3 cruza EMA7 a favor HTF
+- Rechazo en EMA50 + confirmación
+SMC:
+- Barrido de liquidez
+- Retest Order Block
+- BOS a favor
+RSI:
+- Compra >50 subiendo
+- Venta <50 bajando
+`}});
+    createNode({type:"news", parentId:nodeId, state:{title:"News (filtered)", feed:"myfxbook_news", limit:10, filter:"USD"}});
+    createNode({type:"calendar", parentId:nodeId, state:{title:"Calendar USD", feed:"myfxbook_calendar", limit:15, filter:"USD"}});
+  }
+  else if(tpl === "liquidity_50"){
+    createNode({type:"multichart", parentId:nodeId, state:{title:"MTF Structure", symbol:coreSym, cells:["240","60","15","1"]}});
+    createNode({type:"notes", parentId:nodeId, state:{title:"Plan 50% + Liquidity", text:
+`1) Marcar alto/bajo del impulso
+2) Marcar 50% del movimiento
+3) Esperar retroceso a 50%
+4) Esperar barrido de liquidez (arriba/abajo)
+5) Reingreso a la zona -> entrada hacia 50%
+SL: más allá del último high/low (incluye mechas)
+`}});
+    createNode({type:"calendar", parentId:nodeId, state:{title:"Calendar USD", feed:"myfxbook_calendar", limit:15, filter:"USD"}});
+    createNode({type:"snapshots", parentId:nodeId, state:{title:"Setups / Snapshots"}});
+  }
+  else if(tpl === "scalp_pack"){
+    createNode({type:"multichart", parentId:nodeId, state:{title:"Scalp MTF", symbol:coreSym, cells:["60","15","5","1"]}});
+    createNode({type:"news", parentId:nodeId, state:{title:"Hot News", feed:"myfxbook_news", limit:10, filter:"rate"}});
+    createNode({type:"alerts", parentId:nodeId, state:{title:"Alerts", enabled:false}});
+    createNode({type:"journal", parentId:nodeId, state:{title:"Journal (Scalp)"}});
+  }
+
+  m.state.lastRun = `Generated @ ${nowISO()} — template: ${tpl}`;
+  const last = document.getElementById("stratLast_" + nodeId);
+  if(last) last.textContent = m.state.lastRun;
+}
+
+
+/* =========================================================
+   Screen Recorder Node
+   Nota: por seguridad del navegador, el usuario escoge qué pestaña/ventana/pantalla grabar.
+========================================================= */
+function recorderRuntime(nodeId){
+  if(!Engine.recorders.has(nodeId)){
+    Engine.recorders.set(nodeId, {recorder:null, stream:null, chunks:[], clips:[]});
+  }
+  return Engine.recorders.get(nodeId);
+}
+function recStatus(nodeId, text){
+  const box = document.getElementById("rec_status_" + nodeId);
+  if(box) box.textContent = text;
+}
+function recBits(quality){
+  if(quality === "high") return 6000000;
+  if(quality === "light") return 1800000;
+  return 3500000;
+}
+function renderRecorder(nodeId){
+  const m = Engine.nodes.get(nodeId);
+  const box = document.getElementById("rec_list_" + nodeId);
+  if(!m || !box) return;
+  const rt = recorderRuntime(nodeId);
+  const clips = Array.isArray(rt.clips) ? rt.clips : [];
+  const savedMeta = Array.isArray(m.state.clips) ? m.state.clips : [];
+  if(!clips.length && !savedMeta.length){
+    box.innerHTML = `<div class="item"><small>No hay grabaciones todavía.</small></div>`;
+    return;
+  }
+  box.innerHTML = [
+    ...clips.map((c,idx)=>`
+      <div class="item">
+        <div style="font-weight:650">🎬 ${safeText(c.name)}</div>
+        <small>${safeText(c.at)} • ${formatBytes(c.size)}</small>
+        <div class="row" style="margin-top:8px">
+          <a class="btn good" style="text-decoration:none;padding:7px 9px;border-radius:12px" href="${c.url}" download="${safeText(c.name)}">⬇️ Download WEBM</a>
+          <button class="btn bad" style="padding:7px 9px;border-radius:12px" data-act="recDel" data-rec-idx="${idx}">🗑️</button>
+        </div>
+        <video controls style="width:100%;margin-top:8px;border-radius:12px;border:1px solid rgba(79,155,255,.18);background:#000" src="${c.url}"></video>
+      </div>
+    `),
+    ...(!clips.length ? savedMeta.map(c=>`
+      <div class="item">
+        <div style="font-weight:650">🎬 ${safeText(c.name || "Grabación anterior")}</div>
+        <small>${safeText(c.at || "")}</small>
+        <div class="hint" style="margin-top:6px">Esta grabación era de una sesión anterior. Por seguridad del navegador, el video no se guarda en localStorage; descarga cada clip al terminar.</div>
+      </div>
+    `) : [])
+  ].join("");
+
+  box.onclick = (e)=>{
+    const del = e.target.closest('[data-act="recDel"]');
+    if(!del) return;
+    const idx = Number(del.dataset.recIdx);
+    const clip = clips[idx];
+    if(clip?.url) URL.revokeObjectURL(clip.url);
+    clips.splice(idx,1);
+    m.state.clips = clips.map(c=>({name:c.name, at:c.at, size:c.size}));
+    renderRecorder(nodeId);
+    saveAuto();
+  };
+}
+async function startRecorder(nodeId){
+  const m = Engine.nodes.get(nodeId);
+  if(!m) return;
+  const rt = recorderRuntime(nodeId);
+  if(rt.recorder && rt.recorder.state === "recording"){
+    recStatus(nodeId, "Ya está grabando.");
+    return;
+  }
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia){
+    alert("Tu navegador no soporta grabación de pantalla con getDisplayMedia.");
+    return;
+  }
+  try{
+    const includeAudio = String(m.state.includeAudio) !== "false";
+    recStatus(nodeId, "Escoge la pestaña, ventana o pantalla que quieres grabar…");
+    const stream = await navigator.mediaDevices.getDisplayMedia({
+      video: { frameRate: 30, width: { ideal: 1920 }, height: { ideal: 1080 } },
+      audio: includeAudio
+    });
+    const mime = MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus")
+      ? "video/webm;codecs=vp9,opus"
+      : (MediaRecorder.isTypeSupported("video/webm;codecs=vp8,opus") ? "video/webm;codecs=vp8,opus" : "video/webm");
+    rt.stream = stream;
+    rt.chunks = [];
+    rt.recorder = new MediaRecorder(stream, { mimeType:mime, videoBitsPerSecond: recBits(m.state.quality) });
+    rt.recorder.ondataavailable = (ev)=>{ if(ev.data && ev.data.size) rt.chunks.push(ev.data); };
+    rt.recorder.onstop = ()=>finishRecorderClip(nodeId, mime);
+    stream.getVideoTracks()[0].addEventListener("ended", ()=>stopRecorder(nodeId));
+    rt.recorder.start(1000);
+    recStatus(nodeId, "Grabando… usa Stop para guardar el clip.");
+  }catch(err){
+    recStatus(nodeId, "Grabación cancelada o bloqueada.");
+    console.warn(err);
+  }
+}
+function stopRecorder(nodeId, silent=false){
+  const rt = Engine.recorders.get(nodeId);
+  if(!rt) return;
+  try{
+    if(rt.recorder && rt.recorder.state !== "inactive") rt.recorder.stop();
+  }catch(_){ }
+  try{ rt.stream?.getTracks?.().forEach(t=>t.stop()); }catch(_){ }
+  rt.stream = null;
+  if(!silent) recStatus(nodeId, "Deteniendo y preparando descarga…");
+}
+function finishRecorderClip(nodeId, mime){
+  const m = Engine.nodes.get(nodeId);
+  const rt = recorderRuntime(nodeId);
+  if(!m || !rt.chunks.length){
+    recStatus(nodeId, "Grabación detenida sin datos.");
+    return;
+  }
+  const blob = new Blob(rt.chunks, {type:mime || "video/webm"});
+  const stamp = new Date().toISOString().replace(/[:.]/g,"-").slice(0,19);
+  const name = `techblue-recording-${stamp}.webm`;
+  const url = URL.createObjectURL(blob);
+  const clip = {name, at:nowISO(), size:blob.size, url};
+  rt.clips.unshift(clip);
+  m.state.clips = rt.clips.slice(0,20).map(c=>({name:c.name, at:c.at, size:c.size}));
+  rt.chunks = [];
+  recStatus(nodeId, "Clip listo. Puedes verlo o descargarlo en WEBM.");
+  renderRecorder(nodeId);
+  saveAuto();
+}
+function clearRecorderClips(nodeId){
+  const m = Engine.nodes.get(nodeId);
+  const rt = recorderRuntime(nodeId);
+  if(!confirm("¿Limpiar la lista de grabaciones de este nodo? Descarga primero lo que quieras guardar.")) return;
+  rt.clips.forEach(c=>{ if(c.url) URL.revokeObjectURL(c.url); });
+  rt.clips = [];
+  rt.chunks = [];
+  if(m) m.state.clips = [];
+  renderRecorder(nodeId);
+  recStatus(nodeId, "Lista limpia.");
+}
+function formatBytes(bytes){
+  const n = Number(bytes || 0);
+  if(n < 1024) return n + " B";
+  if(n < 1024*1024) return (n/1024).toFixed(1) + " KB";
+  if(n < 1024*1024*1024) return (n/1024/1024).toFixed(1) + " MB";
+  return (n/1024/1024/1024).toFixed(2) + " GB";
+}
+
+/* Alerts */
+function testNotify(title, body){
+  if(!("Notification" in window)){ alert("Este navegador no soporta Notification API."); return; }
+  if(Notification.permission === "granted"){ new Notification(title, {body}); return; }
+  if(Notification.permission !== "denied"){
+    Notification.requestPermission().then(p=>{
+      if(p==="granted") new Notification(title, {body});
+      else alert("Permiso de notificaciones denegado.");
+    });
+    return;
+  }
+  alert("Notificaciones bloqueadas. (Chrome: candado → Notifications)");
+}
+
+function renderAlerts(nodeId){
+  const m = Engine.nodes.get(nodeId);
+  const box = document.getElementById("alerts_" + nodeId);
+  if(!m || !box) return;
+
+  const rules = Array.isArray(m.state.rules) ? m.state.rules : (m.state.rules = []);
+  const status = Engine.alertTimers.has(nodeId) ? "RUNNING" : "STOPPED";
+
+  const header = `
+    <div class="item">
+      <div style="font-weight:650">Status: ${status}</div>
+      <div class="hint">Enabled: ${m.state.enabled ? "On" : "Off"} • Mode: ${safeText(m.state.mode)} • Every: ${safeText(String(m.state.everySec))}s</div>
+    </div>
+  `;
+
+  if(!rules.length){
+    box.innerHTML = header + `<div class="item"><small>No rules yet. Click “Add rule”.</small></div>`;
+    return;
+  }
+
+  box.innerHTML = header + rules.map((r, idx)=>`
+    <div class="item">
+      <div style="font-weight:650">Rule #${idx+1}: price ${safeText(r.op)} ${safeText(String(r.value))}</div>
+      <div class="hint">${safeText(r.note||"")}</div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn bad" style="padding:7px 9px;border-radius:12px" data-act="alertDel" data-idx="${idx}">🗑️ Delete</button>
+      </div>
+    </div>
+  `).join("");
+
+  box.onclick = (e)=>{
+    const del = e.target.closest('[data-act="alertDel"]');
+    if(!del) return;
+    const i = Number(del.dataset.idx);
+    if(!Number.isFinite(i)) return;
+    rules.splice(i,1);
+    renderAlerts(nodeId);
+    saveAuto();
+  };
+}
+
+function addAlertRule(nodeId){
+  const m = Engine.nodes.get(nodeId);
+  if(!m) return;
+  const op = prompt("Operador: >, <, >=, <=, =="," > ");
+  if(op===null) return;
+  const valueStr = prompt("Valor (número):","65000");
+  if(valueStr===null) return;
+  const value = Number(valueStr);
+  if(!Number.isFinite(value)) return alert("Valor inválido.");
+  const note = prompt("Nota (opcional):","breakout") || "";
+
+  m.state.rules = Array.isArray(m.state.rules) ? m.state.rules : [];
+  m.state.rules.push({op: op.trim(), value, note});
+  renderAlerts(nodeId);
+}
+
+async function fetchCryptoUSD(coinId){
+  const url = `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(coinId)}&vs_currencies=usd`;
+  const data = await fetch(url, {cache:"no-store"}).then(r=>r.json());
+  const v = data?.[coinId]?.usd;
+  if(typeof v !== "number") throw new Error("CoinGecko: no price for " + coinId);
+  return v;
+}
+
+function compare(op, a, b){
+  if(op === ">")  return a > b;
+  if(op === "<")  return a < b;
+  if(op === ">=") return a >= b;
+  if(op === "<=") return a <= b;
+  if(op === "==") return a === b;
+  return false;
+}
+
+async function evalAlertsOnce(nodeId){
+  const m = Engine.nodes.get(nodeId);
+  if(!m || !m.state.enabled) return;
+
+  const rules = Array.isArray(m.state.rules) ? m.state.rules : [];
+  if(!rules.length) return;
+
+  let price = null;
+  if(m.state.mode === "crypto"){
+    const coinId = (m.state.symbol || "bitcoin").trim().toLowerCase();
+    price = await fetchCryptoUSD(coinId);
+  }else{
+    price = Number(m.state.manualPrice);
+    if(!Number.isFinite(price)) return;
+  }
+
+  for(const r of rules){
+    if(compare(r.op, price, Number(r.value))){
+      testNotify("Tech Blue Alert", `${m.state.mode==="crypto" ? (m.state.symbol||"crypto") : "manual"} price ${price} ${r.op} ${r.value} • ${r.note||""}`);
+    }
+  }
+}
+
+function startAlerts(nodeId){
+  stopAlerts(nodeId);
+  const m = Engine.nodes.get(nodeId);
+  if(!m) return;
+
+  if(!m.state.enabled){
+    const ok = confirm("Enabled está Off. ¿Quieres encenderlo?");
+    if(!ok) return;
+    m.state.enabled = true;
+    const el = getNodeEl(nodeId);
+    const enabledSel = el?.querySelector('select[data-k="enabled"]');
+    if(enabledSel) enabledSel.value = "true";
+  }
+
+  const every = Math.max(5, Number(m.state.everySec || 15));
+  const timer = setInterval(()=>{ evalAlertsOnce(nodeId).catch(()=>{}); }, every * 1000);
+  Engine.alertTimers.set(nodeId, timer);
+  renderAlerts(nodeId);
+}
+
+function stopAlerts(nodeId){
+  const t = Engine.alertTimers.get(nodeId);
+  if(t){ clearInterval(t); Engine.alertTimers.delete(nodeId); }
+  const m = Engine.nodes.get(nodeId);
+  if(m && m.type==="alerts") renderAlerts(nodeId);
+}
+
+/* Session */
+function updateSessionNow(nodeId){
+  const m = Engine.nodes.get(nodeId);
+  const el = document.getElementById("sessNow_" + nodeId);
+  if(!m || !el) return;
+  el.textContent = `${m.state.session?.toUpperCase?.() || "—"} • ${new Date().toLocaleString()}`;
+}
+function applySession(nodeId){
+  const m = Engine.nodes.get(nodeId);
+  if(!m) return;
+
+  updateSessionNow(nodeId);
+
+  // auto workspace apply
+  if(m.state.autoWorkspace){
+    applyWorkspace(m.state.workspace || "london");
+    const sel = $("#workspaceSel");
+    if(sel) sel.value = (m.state.workspace || "london");
+  }
+}
+function spawnSessionPack(nodeId){
+  const m = Engine.nodes.get(nodeId);
+  if(!m) return;
+
+  const coreId = getCoreIdOrNull();
+  const coreSym = coreId ? (Engine.nodes.get(coreId).state.symbol||"OANDA:EURUSD") : "OANDA:EURUSD";
+
+  createNode({type:"multichart", parentId:nodeId, state:{title:`${m.state.session?.toUpperCase?.()||"SESSION"} MTF`, symbol:coreSym, cells:["240","60","15","1"]}});
+  createNode({type:"calendar", parentId:nodeId, state:{title:"Calendar", feed:"myfxbook_calendar", limit:15, filter:"USD"}});
+  createNode({type:"news", parentId:nodeId, state:{title:"News", feed:"myfxbook_news", limit:10, filter:"USD"}});
+  createNode({type:"notes", parentId:nodeId, state:{title:"Session Notes", text:m.state.notes||""}});
+}
+
+/* Journal */
+function renderJournal(nodeId){
+  const m = Engine.nodes.get(nodeId);
+  const box = document.getElementById("journal_" + nodeId);
+  if(!m || !box) return;
+
+  const rows = Array.isArray(m.state.rows) ? m.state.rows : (m.state.rows = []);
+  if(!rows.length){
+    box.innerHTML = `<div class="item"><small>No trades yet.</small></div>`;
+    return;
+  }
+
+  box.innerHTML = rows.slice(0, 80).map((r, idx)=>`
+    <div class="item">
+      <div style="font-weight:650">${safeText(r.symbol)} • ${safeText(r.tf)} • <span style="color:${r.res==="win"?"#20c997":r.res==="loss"?"#ef476f":"#9eb8ff"}">${safeText(r.res)}</span></div>
+      <small>${safeText(r.at)}</small>
+      <div class="hint" style="margin-top:6px">Entry: ${safeText(r.entry||"")} • SL: ${safeText(r.sl||"")} • TP: ${safeText(r.tp||"")}</div>
+      <div class="hint">${safeText(r.note||"")}</div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn" style="padding:7px 9px;border-radius:12px" data-act="jOpen" data-idx="${idx}">📈 Open Chart</button>
+        <button class="btn bad" style="padding:7px 9px;border-radius:12px" data-act="jDel" data-idx="${idx}">🗑️</button>
+      </div>
+    </div>
+  `).join("");
+
+  box.onclick = (e)=>{
+    const open = e.target.closest('[data-act="jOpen"]');
+    const del  = e.target.closest('[data-act="jDel"]');
+    if(open){
+      const i = Number(open.dataset.idx);
+      const r = rows[i]; if(!r) return;
+      createNode({type:"chart", parentId:nodeId, state:{title:"Journal Chart", symbol:r.symbol, interval:String(r.tf)}});
+      saveAuto(); return;
+    }
+    if(del){
+      const i = Number(del.dataset.idx);
+      if(!Number.isFinite(i)) return;
+      rows.splice(i,1);
+      renderJournal(nodeId);
+      saveAuto();
+    }
+  };
+}
+
+function fillJournalFromCore(journalId){
+  const coreId = getCoreIdOrNull();
+  const symEl = document.getElementById("j_sym_"+journalId);
+  const tfEl  = document.getElementById("j_tf_"+journalId);
+  if(!coreId) return;
+  const core = Engine.nodes.get(coreId);
+  if(symEl) symEl.value = core.state.symbol || "";
+  if(tfEl) tfEl.value = core.state.interval || "15";
+}
+
+function addJournalRow(journalId){
+  const m = Engine.nodes.get(journalId);
+  if(!m) return;
+
+  const sym = (document.getElementById("j_sym_"+journalId)?.value || "").trim() || (Engine.nodes.get(getCoreIdOrNull())?.state?.symbol || "OANDA:EURUSD");
+  const tf  = (document.getElementById("j_tf_"+journalId)?.value || "15").trim();
+  const entry = (document.getElementById("j_entry_"+journalId)?.value || "").trim();
+  const sl    = (document.getElementById("j_sl_"+journalId)?.value || "").trim();
+  const tp    = (document.getElementById("j_tp_"+journalId)?.value || "").trim();
+  const res   = (document.getElementById("j_res_"+journalId)?.value || "open").trim();
+  const note  = (document.getElementById("j_note_"+journalId)?.value || "").trim();
+
+  m.state.rows = Array.isArray(m.state.rows) ? m.state.rows : [];
+  m.state.rows.unshift({ at: nowISO(), symbol:sym, tf, entry, sl, tp, res, note });
+
+  // clear light fields
+  const noteEl = document.getElementById("j_note_"+journalId);
+  if(noteEl) noteEl.value = "";
+
+  renderJournal(journalId);
+}
+
+function exportJournal(journalId){
+  const m = Engine.nodes.get(journalId);
+  const rows = Array.isArray(m?.state?.rows) ? m.state.rows : [];
+  const blob = new Blob([JSON.stringify({exportedAt:nowISO(), journal:rows}, null, 2)], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "techblue-journal.json";
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 1500);
+}
+
+/* Workspace */
+function applyWorkspace(mode){
+  const sr = stageRect();
+  const padX = 14;
+  const padY = 70;
+  if(mode === "free") return;
+
+  const core = [], charts = [], multi = [], news = [], cal = [], watch = [], snaps = [], strat = [], alerts = [], notes = [], sess = [], journ = [];
+  for(const [id,n] of Engine.nodes){
+    if(n.type==="core") core.push(n);
+    else if(n.type==="chart") charts.push(n);
+    else if(n.type==="multichart") multi.push(n);
+    else if(n.type==="news") news.push(n);
+    else if(n.type==="calendar") cal.push(n);
+    else if(n.type==="watchlist") watch.push(n);
+    else if(n.type==="snapshots") snaps.push(n);
+    else if(n.type==="strategy") strat.push(n);
+    else if(n.type==="alerts") alerts.push(n);
+    else if(n.type==="session") sess.push(n);
+    else if(n.type==="journal") journ.push(n);
+    else notes.push(n);
+  }
+
+  let colA=[], colB=[], colC=[];
+  if(mode==="london"){
+    colA = [...core, ...sess, ...watch, ...strat];
+    colB = [...multi, ...charts];
+    colC = [...cal, ...news, ...snaps, ...journ, ...alerts, ...notes];
+  }else if(mode==="ny"){
+    colA = [...core, ...sess, ...watch, ...alerts];
+    colB = [...multi, ...charts];
+    colC = [...news, ...cal, ...snaps, ...journ, ...strat, ...notes];
+  }else{ // research
+    colA = [...core, ...sess, ...snaps, ...journ, ...notes];
+    colB = [...multi, ...charts];
+    colC = [...news, ...cal, ...watch, ...strat, ...alerts];
+  }
+
+  const colW = Math.max(360, Math.floor((sr.width - padX*4)/3));
+  const x1 = padX;
+  const x2 = padX*2 + colW;
+  const x3 = padX*3 + colW*2;
+
+  function stack(col, x){
+    let y = padY;
+    for(const n of col){
+      n.x = clamp(x, 10, sr.width - n.w - 10);
+      n.y = clamp(y, 64, sr.height - n.h - 10);
+      syncNodeDOM(n.id);
+      y += n.h + 12;
+    }
+  }
+
+  stack(colA, x1);
+  stack(colB, x2);
+  stack(colC, x3);
+
+  drawWires();
+  saveAuto();
+}
+
+/* Save/Load */
+function snapshot(){
+  return {
+    version: 13,
+    savedAt: nowISO(),
+    nodes: Array.from(Engine.nodes.values()).map(n=>({
+      id:n.id, type:n.type, parentId:n.parentId,
+      x:n.x,y:n.y,w:n.w,h:n.h,
+      state:n.state,
+      angleIndex:n.angleIndex||0
+    })),
+    edges: Engine.edges.slice()
+  };
+}
+function applySnapshot(data){
+  for(const [id] of Engine.alertTimers) stopAlerts(id);
+  Engine.nodes.clear(); Engine.edges = [];
+  $("#nodes").innerHTML = ""; $("#wires").innerHTML = "";
+
+  const byId = new Map();
+  for(const n of (data.nodes||[])){
+    const id = n.id;
+    const model = {
+      id,
+      type:n.type,
+      parentId:n.parentId ?? null,
+      x:n.x ?? 100, y:n.y ?? 100,
+      w:n.w ?? 320, h:n.h ?? 300,
+      state: {...defaultNodeState(n.type), ...(n.state||{})},
+      createdAt: Date.now(),
+      angleIndex: n.angleIndex || 0,
+    };
+    Engine.nodes.set(id, model);
+    byId.set(id, true);
+
+    const el = document.createElement("div");
+    el.className = "node";
+    el.dataset.id = id;
+    el.dataset.type = model.type;
+    el.style.width = model.w + "px";
+    el.style.zIndex = (++Engine.z).toString();
+    el.innerHTML = `
+      <div class="nodeHead" data-drag>
+        <div class="nodeTitle">
+          <span class="chip">${model.type.toUpperCase()}</span>
+          <b data-title>${safeText(model.state.title || model.type)}</b>
+        </div>
+        <div class="nodeTools">
+          <button class="mini" title="Crear nodo hijo" data-act="spawn">＋</button>
+          ${model.type==="core" ? "" : `<button class="mini" title="Traer al frente" data-act="front">⬆</button>`}
+          ${model.type==="core" ? "" : `<button class="mini" title="Eliminar" data-act="del">✕</button>`}
+        </div>
+      </div>
+      <div class="dragSide left" data-side-drag title="Arrastrar nodo desde el lado izquierdo"></div>
+      <div class="dragSide right" data-side-drag title="Arrastrar nodo desde el lado derecho"></div>
+      <div class="nodeBody">${renderBody(model.type, id, model.state)}</div>
+    `;
+    $("#nodes").appendChild(el);
+    syncNodeDOM(id);
+    applyChartShell(id);
+    bindNode(id);
+  }
+
+  Engine.edges = (data.edges||[]).filter(e=> byId.has(e.from) && byId.has(e.to));
+
+  // re-init special
+  for(const [id, m] of Engine.nodes){
+    if(m.type==="chart" || m.type==="core"){ applyChartShell(id); renderTradingViewWidget(id); }
+    if(m.type==="multichart"){ applyChartShell(id); renderMultiChart(id); }
+    if(m.type==="news" || m.type==="calendar") loadFeed(id);
+    if(m.type==="watchlist") renderWatchlistTags(id);
+    if(m.type==="snapshots") renderSnapshots(id);
+    if(m.type==="alerts") renderAlerts(id);
+    if(m.type==="journal") renderJournal(id);
+    if(m.type==="session") updateSessionNow(id);
+  }
+
+  drawWires();
+  saveAuto();
+}
+function saveAuto(){ try{ localStorage.setItem(STORE_KEY, JSON.stringify(snapshot())); }catch(_){ } }
+function loadAuto(){
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    if(!raw) return false;
+    applySnapshot(JSON.parse(raw));
+    return true;
+  }catch(_){ return false; }
+}
+
+/* Top bar buttons */
+$("#btnAddChart").onclick   = ()=>{ createNode({type:"chart", parentId:getCoreIdOrNull(), state: coreStateHint()}); saveAuto(); };
+$("#btnAddMulti").onclick   = ()=>{ const c=coreStateHint(); createNode({type:"multichart", parentId:getCoreIdOrNull(), state:{symbol:c.symbol||"OANDA:EURUSD", cells:["240","60","15","1"]}}); saveAuto(); };
+$("#btnAddSession").onclick = ()=>{ createNode({type:"session", parentId:getCoreIdOrNull()}); saveAuto(); };
+$("#btnAddNews").onclick    = ()=>{ createNode({type:"news", parentId:getCoreIdOrNull()}); saveAuto(); };
+$("#btnAddCal").onclick     = ()=>{ createNode({type:"calendar", parentId:getCoreIdOrNull(), state:{feed:"myfxbook_calendar"}}); saveAuto(); };
+$("#btnAddWatch").onclick   = ()=>{ createNode({type:"watchlist", parentId:getCoreIdOrNull()}); saveAuto(); };
+$("#btnAddSnap").onclick    = ()=>{ createNode({type:"snapshots", parentId:getCoreIdOrNull()}); saveAuto(); };
+$("#btnAddStrat").onclick   = ()=>{ createNode({type:"strategy", parentId:getCoreIdOrNull()}); saveAuto(); };
+$("#btnAddAlert").onclick   = ()=>{ createNode({type:"alerts", parentId:getCoreIdOrNull()}); saveAuto(); };
+$("#btnAddJournal").onclick = ()=>{ createNode({type:"journal", parentId:getCoreIdOrNull()}); saveAuto(); };
+$("#btnAddRecorder").onclick = ()=>{ createNode({type:"recorder", parentId:getCoreIdOrNull()}); saveAuto(); };
+$("#btnAddNote").onclick    = ()=>{ createNode({type:"notes", parentId:getCoreIdOrNull()}); saveAuto(); };
+
+$("#btnWorkspace").onclick  = ()=>{ applyWorkspace($("#workspaceSel").value); };
+
+$("#btnSave").onclick = ()=>{ saveAuto(); alert("✅ Guardado en localStorage"); };
+$("#btnLoad").onclick = ()=>{ if(!loadAuto()) alert("No hay save todavía."); };
+
+$("#btnExport").onclick = ()=>{
+  const data = snapshot();
+  const blob = new Blob([JSON.stringify(data,null,2)], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "techblue-node-engine-v1_3.json";
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 1500);
+};
+
+$("#btnImport").onclick = async ()=>{
+  const inp = document.createElement("input");
+  inp.type = "file";
+  inp.accept = "application/json";
+  inp.onchange = async ()=>{
+    const f = inp.files?.[0];
+    if(!f) return;
+    const txt = await f.text();
+    try{ applySnapshot(JSON.parse(txt)); alert("✅ Importado"); }
+    catch(err){ alert("❌ JSON inválido: " + err); }
+  };
+  inp.click();
+};
+
+$("#btnResetAll").onclick = ()=>{
+  if(!confirm("Esto borra TODO en este navegador. ¿Seguro?")) return;
+  localStorage.removeItem(STORE_KEY);
+  location.reload();
+};
+
+function coreStateHint(){
+  const coreId = getCoreIdOrNull();
+  if(!coreId) return {};
+  const core = Engine.nodes.get(coreId);
+  return { symbol: core.state.symbol, interval: core.state.interval };
+}
+
+/* Boot */
+(function init(){
+  const loaded = loadAuto();
+  if(!loaded){
+    const sr = stageRect();
+
+    // CORE
+    createNode({
+      type:"core",
+      parentId:null,
+      x: Math.round(sr.width/2 - 190),
+      y: Math.round(sr.height/2 - 260),
+      state: { title:"CORE", symbol:"OANDA:EURUSD", interval:"15", syncMode:"both" }
+    });
+
+    // starter PRO pack
+    createNode({type:"session", parentId:getCoreIdOrNull(), state:{title:"London Session", session:"london", autoWorkspace:true, workspace:"london", notes:"Plan: HTF trend + Liquidity + Entry 1m"}});
+    createNode({type:"watchlist", parentId:getCoreIdOrNull(), state:{title:"Watchlist"}});
+    createNode({type:"multichart", parentId:getCoreIdOrNull(), state:{title:"MTF Dashboard", symbol:"OANDA:EURUSD", cells:["240","60","15","1"]}});
+    createNode({type:"news", parentId:getCoreIdOrNull(), state:{title:"Forex News", feed:"myfxbook_news", limit:10, filter:"USD"}});
+    createNode({type:"calendar", parentId:getCoreIdOrNull(), state:{title:"Calendar", feed:"myfxbook_calendar", limit:15, filter:"USD"}});
+    createNode({type:"snapshots", parentId:getCoreIdOrNull(), state:{title:"Snapshots"}});
+    createNode({type:"journal", parentId:getCoreIdOrNull(), state:{title:"Trade Journal"}});
+    createNode({type:"strategy", parentId:getCoreIdOrNull(), state:{title:"Strategy", template:"ema_smc"}});
+    createNode({type:"alerts", parentId:getCoreIdOrNull(), state:{title:"Alerts", enabled:false, mode:"crypto", symbol:"bitcoin", everySec:15, rules:[{op:">", value:65000, note:"BTC breakout"}]}});
+    createNode({type:"notes", parentId:getCoreIdOrNull(), state:{title:"Plan", text:"1) HTF trend\n2) Liquidity\n3) Entry\n4) Risk\n"}});
+
+    saveAuto();
+    applyWorkspace("london");
+  }
+})();
+</script>
+
+</body>
+</html>
