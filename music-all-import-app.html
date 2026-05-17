@@ -938,6 +938,123 @@
             display: none
         }
     }
+
+
+    /* =========================================================
+       ✅ FIX PRO — CARRUSEL DE FAVORITOS DENTRO DEL CONTAINER
+       Evita scroll infinito lateral y mantiene el carrusel contenido
+    ========================================================= */
+    html,
+    body {
+        width: 100%;
+        max-width: 100%;
+        overflow-x: hidden;
+    }
+
+    .wrap,
+    .grid,
+    .panel,
+    .panel-body,
+    .carousel-wrap {
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .carousel-wrap {
+        position: relative;
+        width: 100%;
+        overflow: hidden;
+        border-radius: 20px;
+    }
+
+    #favoritesCarousel.carousel {
+        width: 100%;
+        max-width: 100%;
+        display: flex;
+        flex-wrap: nowrap;
+        gap: 14px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        scroll-behavior: smooth;
+        scroll-snap-type: x mandatory;
+        overscroll-behavior-x: contain;
+        padding: 8px 8px 16px;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    #favoritesCarousel.carousel::-webkit-scrollbar {
+        display: none;
+    }
+
+    #favoritesCarousel .fav-card {
+        flex: 0 0 clamp(170px, 42vw, 220px);
+        min-width: 170px;
+        max-width: 220px;
+        scroll-snap-align: start;
+        transition: transform .22s ease, box-shadow .22s ease;
+    }
+
+    #favoritesCarousel .fav-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 18px 40px rgba(0, 0, 0, .35);
+    }
+
+    .carousel-btn {
+        top: 50%;
+        z-index: 10;
+        width: 44px;
+        height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 22px;
+        font-weight: 900;
+        background: rgba(5, 8, 18, .82);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, .12);
+    }
+
+    .carousel-btn:hover {
+        transform: translateY(-50%) scale(1.06);
+        background: rgba(25, 35, 65, .92);
+    }
+
+    .carousel-btn.left {
+        left: 8px;
+    }
+
+    .carousel-btn.right {
+        right: 8px;
+    }
+
+    @media (max-width: 720px) {
+        #favoritesCarousel .fav-card {
+            flex-basis: 170px;
+            max-width: 170px;
+        }
+
+        #favoritesCarousel .fav-poster {
+            height: 220px;
+        }
+
+        .carousel-btn {
+            width: 38px;
+            height: 38px;
+        }
+    }
+
+    @media (max-width: 520px) {
+        .carousel-btn {
+            display: none !important;
+        }
+
+        #favoritesCarousel.carousel {
+            padding-left: 4px;
+            padding-right: 4px;
+        }
+    }
+
     </style>
 </head>
 <body>
@@ -1761,6 +1878,7 @@
         applySearch();
         renderImported();
         renderFavorites();
+        setTimeout(updateFavoritesCarouselButtons, 50);
         updateStats();
         renderFloatingSearchResults();
         if (currentPipItem) {
@@ -2345,14 +2463,34 @@
     searchInput.addEventListener('input', renderAll);
     document.querySelectorAll('input[name="importMode"]').forEach(r => r.addEventListener('change', updateStats));
     dedupeToggle.addEventListener('change', updateStats);
-    favLeftBtn.addEventListener('click', () => favoritesCarousel.scrollBy({
-        left: -380,
-        behavior: 'smooth'
-    }));
-    favRightBtn.addEventListener('click', () => favoritesCarousel.scrollBy({
-        left: 380,
-        behavior: 'smooth'
-    }));
+    // ✅ FIX PRO — movimiento del carrusel sin romper el layout
+    function moveFavoritesCarousel(direction) {
+        if (!favoritesCarousel)
+            return;
+
+        const amount = Math.max(260, favoritesCarousel.clientWidth * 0.75);
+        favoritesCarousel.scrollBy({
+            left: direction * amount,
+            behavior: 'smooth'
+        });
+    }
+
+    function updateFavoritesCarouselButtons() {
+        if (!favoritesCarousel || !favLeftBtn || !favRightBtn)
+            return;
+
+        const maxScroll = favoritesCarousel.scrollWidth - favoritesCarousel.clientWidth;
+        const hasOverflow = maxScroll > 8;
+
+        favLeftBtn.style.display = hasOverflow && favoritesCarousel.scrollLeft > 5 ? 'flex' : 'none';
+        favRightBtn.style.display = hasOverflow && favoritesCarousel.scrollLeft < maxScroll - 5 ? 'flex' : 'none';
+    }
+
+    favLeftBtn.addEventListener('click', () => moveFavoritesCarousel(-1));
+    favRightBtn.addEventListener('click', () => moveFavoritesCarousel(1));
+    favoritesCarousel.addEventListener('scroll', updateFavoritesCarouselButtons);
+    window.addEventListener('resize', updateFavoritesCarouselButtons);
+    setTimeout(updateFavoritesCarouselButtons, 300);
 
     miniPipClose.addEventListener('click', closeMiniPip);
     miniPipFavBtn.addEventListener('click', () => {
